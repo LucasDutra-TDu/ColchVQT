@@ -88,8 +88,8 @@ CATALOGO_ANCHOS = {
 # === ESTILOS VISUALES REUTILIZABLES (MODO OSCURO) ===
 ESTILOS = {
     "boton_menu": "font-size: 16px; padding: 10px; background-color: #222; color: #fff;",
-    "titulo_columna": "padding: 0 2px; font-size: 13px; color: #f0f0f0; background-color: #333; font-family: 'Arial Narrow', Arial, sans-serif;",
-    "celda": "padding: 0 2px; color: #e0e0e0; background-color: #222; font-size: 14px; font-family: 'Arial Narrow', Arial, sans-serif;",
+    "titulo_columna": "padding: 0 2px; font-size: 13px; color: #f0f0f0; font-family: 'Arial Narrow', Arial, sans-serif;",
+    "celda": "padding: 0 2px; color: #e0e0e0; font-size: 14px; font-family: 'Arial Narrow', Arial, sans-serif;",
     "header_fondo": "#333",
     "fila_par": "#2a2a2a",
     "fila_impar": "#1e1e1e",

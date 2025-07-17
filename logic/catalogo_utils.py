@@ -8,28 +8,31 @@ def formatear_info_para_copiar(row: pd.Series, tipo: str) -> str:
 
     if tipo == "colchones":
         partes += [
-            f"Marca: '{row['PROVEEDOR']}'",
-            f"Modelo: '{row['MODELO']}'",
-            f"Medida: '{row['MEDIDA (LARG-ANCH-ESP)']}'"
+            f"Marca: '{row.get('PROVEEDOR', '-')}'",
+            f"Modelo: '{row.get('MODELO', '-')}'",
+            f"Medida: '{row.get('MEDIDA (LARG-ANCH-ESP)', '-')}'"
         ]
-        if pd.notnull(row.get('MATERIAL')):
+        if 'MATERIAL' in row and pd.notnull(row['MATERIAL']):
             partes.append(f"Material: '{row['MATERIAL']}'")
-        if pd.notnull(row.get('SOPORTA (PorPlaza)')):
+        if 'SOPORTA (PorPlaza)' in row and pd.notnull(row['SOPORTA (PorPlaza)']):
             partes.append(f"PesoSoportado: '{row['SOPORTA (PorPlaza)']}'")
+
     elif tipo == "otros":
         partes += [
-            f"Línea: {row['PROVEEDOR']}",
-            f"Producto: {row['CARACTERISTICAS']}",
-            f"Color: {row['MODELO']}"
+            f"Línea: {row.get('PROVEEDOR', '-')}",
+            f"Producto: {row.get('CARACTERISTICAS', '-')}",
+            f"Color: {row.get('MODELO', '-')}"
         ]
 
     # Precios comunes
-    partes += [
-        f"Efectivo: ${row['EFECTIVO']}",
-        f"Transf/Déb/Créd: ${row['TRANSF/DEBIT/CREDIT']}",
-        f"3 Cuotas: ${row['3 CUOTAS']} (3x ${int(row['3 CUOTAS']) // 3})",
-        f"6 Cuotas: ${row['6 CUOTAS']} (6x ${int(row['6 CUOTAS']) // 6})"
-    ]
+    for key in ['EFECTIVO', 'TRANSF/DEBIT/CREDIT', '3 CUOTAS', '6 CUOTAS']:
+        if key in row and pd.notnull(row[key]):
+            if key.startswith("3") or key.startswith("6"):
+                cuotas = int(key[0])
+                partes.append(f"{key}: ${row[key]} ({cuotas}x ${int(row[key]) // cuotas})")
+            else:
+                partes.append(f"{key}: ${row[key]}")
+
     return "\n".join(partes)
 
 

@@ -139,10 +139,16 @@ class CatalogoWidget(QWidget):
         df = self.sheets[hoja].copy()
         df = df.dropna(subset=['COSTO']) if 'COSTO' in df.columns else df.dropna(subset=['costo'])
         df = self._agregar_precios_desde_fila(df)
-        tipo = 'colchones' if hoja in ['ALMOHADAS', 'SOMMIERS'] else 'otros'
-        campos = CAMPOS_CATALOGO.get(tipo, CAMPOS_CATALOGO['otros'])
-        copiar = self._copiar_info_fila if tipo == 'colchones' else self._copiar_info_fila_otros
+
+        if hoja in ["ALMOHADAS", "SOMMIERS"]:
+            campos = ["PROVEEDOR", "MODELO", "MEDIDA (LARG-ANCH-ESP)", "EFECTIVO", "TRANSF/DEBIT/CREDIT", "3 CUOTAS", "6 CUOTAS"]
+            copiar = self._copiar_info_fila
+        else:
+            campos = CAMPOS_CATALOGO['otros']
+            copiar = self._copiar_info_fila_otros
+
         self._mostrar_tabla_productos(df, origen, campos, copiar)
+
 
     def abrir_otros_productos(self):
         df = self._obtener_otros_productos()
