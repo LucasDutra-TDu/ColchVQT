@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
-from ui.catalogo import CatalogoWidget
+from ui.catalogo_v2 import CatalogoWidgetV2
 from logic.constants import messages
 
 
@@ -12,7 +12,7 @@ class MainWindow(QMainWindow):
         self.resize(1000, 800)
 
         # Inicializar widgets
-        self.catalogo_widget = CatalogoWidget(sheets)
+        self.catalogo_widget = CatalogoWidgetV2(sheets)
 
         # Diccionario de vistas disponibles
         self.vistas = {

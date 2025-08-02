@@ -1,4 +1,4 @@
-# colchonería.spec
+# main.spec
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -6,11 +6,12 @@ block_cipher = None
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[
-        ('ui/*', 'ui'),       # Incluye toda la carpeta ui/
-        ('logic/*', 'logic'), # Incluye toda la carpeta logic/
+        ('ui/*.py', 'ui'),            # incluir archivos .py de la carpeta ui
+        ('logic/*.py', 'logic'),      # incluir archivos .py de la carpeta logic
+        ('data/*', 'data'),           # incluir contenido de data (como colchonería.xlsx, si existe)
     ],
     hiddenimports=[],
     hookspath=[],
@@ -20,7 +21,6 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
@@ -30,17 +30,12 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Colchonería',
+    name='main',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,   # Oculta la consola (equivalente a --windowed)
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None
+    console=False,  # cambia a True si querés ver logs en consola
 )
 
 coll = COLLECT(
@@ -51,5 +46,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Colchonería'
+    name='main'
 )
