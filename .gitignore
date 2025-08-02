@@ -1,0 +1,36 @@
+# Carpeta con datos empresariales
+data/
+
+# Archivos Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+env/
+venv/
+ENV/
+.venv/
+
+# Archivos de configuración de VS Code
+.vscode/
+
+# Archivos de log
+*.log
+
+# Archivos de empaquetado (PyInstaller, cx_Freeze, etc)
+dist/
+build/
+*.spec
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.swp
+*.bak
+
+# Carpetas ocultas de control
+.git/
