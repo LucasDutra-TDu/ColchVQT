@@ -65,14 +65,14 @@ CATALOGO_ANCHOS = {
     "COPIAR": 25,
     "PROVEEDOR": 100,
     "MODELO": 340,
+    "CARACTERISTICAS": 250,
     "MEDIDA (LARG-ANCH-ESP)": 120,
     "MATERIAL": 100,
     "SOPORTA (PorPlaza)": 90,
     "EFECTIVO/TRANSF": 95,
     "DEBIT/CREDIT": 95,
     "3 CUOTAS": 250,
-    "6 CUOTAS": 250,
-    "CARACTERISTICAS": 250
+    "6 CUOTAS": 250
 }
 
 # === ESTILOS VISUALES REUTILIZABLES ===
@@ -120,83 +120,10 @@ MENU_CONFIG = {
             "ACOLCHADOS", "ALFOMBRAS DE BAÑO", "AROMATIZADORES", "BATAS DE BAÑO",
             "CESTOS PARA ROPA", "FRAZADAS", "MUEBLES", "TOALLAS", "SABANAS", "RESPALDOS"
         ]
+    },
+    "busqueda": {
+        "nombre": "Buscar por código",
+        "tipo": "busqueda"
     }
 }
-
-# === CONFIGURACIÓN DE HOJAS DEL CATÁLOGO ===
-SHEET_CONFIG = {
-    "GENERAL": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "1 PLAZA": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "1 1/2 PLAZA": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "2 PLAZAS": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "QUEEN": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "KING": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO", "MATERIAL", "SOPORTA (PorPlaza)"],
-        "copiar": "copiar_colchon"
-    },
-    "ALMOHADAS": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "SOMMIERS": {
-        "campos": ["PROVEEDOR", "MEDIDA (LARG-ANCH-ESP)", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "ALFOMBRAS DE BAÑO": {
-        "campos": ["MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "AROMATIZADORES": {
-        "campos": ["MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "CESTOS PARA ROPA": {
-        "campos": ["MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "MUEBLES": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "SABANAS": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "TOALLAS": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "BATAS DE BAÑO": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "FRAZADAS": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "ACOLCHADOS": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    },
-    "RESPALDOS": {
-        "campos": ["CARACTERISTICAS", "MODELO"],
-        "copiar": "copiar_otros"
-    }
-}
-
 

@@ -1,6 +1,6 @@
 # ui\views.py
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QFrame, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QFrame, QSizePolicy, QLineEdit
 from PySide6.QtCore import Qt
 from logic.constants import ESTILOS, MENU_CONFIG, CAMPOS_CATALOGO, CATALOGO_ANCHOS
 from logic import catalogo_utils_v2
@@ -8,11 +8,12 @@ from logic.catalogo_utils_v2 import obtener_df_por_hoja
 from typing import Callable
 from functools import partial
 import re
+import pandas as pd
 
 def build_tabla_productos(df, campos, copiar_callback):
     contenedor = QWidget()
     layout_principal = QVBoxLayout(contenedor)
-    contenedor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+    contenedor.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
 
     # Encabezados de columna
     header_layout = QHBoxLayout()
@@ -30,13 +31,13 @@ def build_tabla_productos(df, campos, copiar_callback):
     layout_principal.addLayout(header_layout)
 
     for i, fila in df[campos].iterrows():
-        fila_widget = QWidget()
-        fila_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        estilo_fondo = ESTILOS['fila_par'] if i % 2 == 0 else ESTILOS['fila_impar']
-        fila_widget.setStyleSheet(f"background-color: {estilo_fondo};")
-
         layout_fila = QHBoxLayout()
+        estilo_fondo = ESTILOS['fila_par'] if i % 2 == 0 else ESTILOS['fila_impar']
+
+        fila_widget = QWidget()
+        fila_widget.setStyleSheet(f"background-color: {estilo_fondo};")
+        fila_widget.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+
         info_fila = {}
 
         boton = QPushButton("📋")
@@ -44,7 +45,7 @@ def build_tabla_productos(df, campos, copiar_callback):
         boton.setMaximumWidth(CATALOGO_ANCHOS["COPIAR"])
         boton.setMinimumWidth(CATALOGO_ANCHOS["COPIAR"])
         boton.setFixedHeight(ESTILOS["altura_celda"])
-        boton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        boton.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         boton.clicked.connect(partial(copiar_callback, info_fila))
         layout_fila.addWidget(boton)
 
@@ -71,7 +72,6 @@ def build_tabla_productos(df, campos, copiar_callback):
             label.setFixedWidth(CATALOGO_ANCHOS.get(campo, 100))
             label.setStyleSheet((ESTILOS.get("celda_numero") if es_numerico else ESTILOS.get("celda_texto")) or "")
             label.setFixedHeight(ESTILOS["altura_celda"])
-            label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             layout_fila.addWidget(label)
             info_fila[campo] = valor
 
@@ -123,3 +123,41 @@ def build_menu_view(opciones: dict, on_click: Callable[[str], None], estilo_boto
         layout.addWidget(boton_volver)
 
     return menu
+
+def build_busqueda_view(on_buscar: Callable[[str], pd.DataFrame], volver_callback: Callable) -> QWidget:
+    vista = QWidget()
+    layout = QVBoxLayout(vista)
+
+    input_codigo = QLineEdit()
+    input_codigo.setPlaceholderText("Ingrese el código del producto...")
+    layout.addWidget(input_codigo)
+
+    boton_buscar = QPushButton("Buscar")
+    boton_buscar.setStyleSheet(ESTILOS["boton_volver"])
+    layout.addWidget(boton_buscar)
+
+    resultados_contenedor = QWidget()
+    resultados_layout = QVBoxLayout(resultados_contenedor)
+    layout.addWidget(resultados_contenedor)
+
+    def ejecutar_busqueda():
+        codigo = input_codigo.text().strip()
+        if codigo:
+            df = on_buscar(codigo)
+            for i in reversed(range(resultados_layout.count())):
+                widget = resultados_layout.itemAt(i).widget()
+                if widget:
+                    widget.setParent(None)
+            if not df.empty:
+                campos_visibles = [col for col in df.columns if col == "CÓDIGO" or col == "CODIGO" or col in CAMPOS_CATALOGO.get("colchones", []) or col in CAMPOS_CATALOGO.get("otros", [])]
+                tabla = build_tabla_productos(df, campos_visibles, catalogo_utils_v2.copiar_info_busqueda)
+                resultados_layout.addWidget(tabla)
+
+    boton_buscar.clicked.connect(ejecutar_busqueda)
+
+    boton_volver = QPushButton("Volver al Menú")
+    boton_volver.setStyleSheet(ESTILOS['boton_volver'])
+    boton_volver.clicked.connect(volver_callback)
+    layout.addWidget(boton_volver)
+
+    return vista

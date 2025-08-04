@@ -2,7 +2,8 @@
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QStackedLayout
 from logic.constants import MENU_CONFIG, ESTILOS, CAMPOS_CATALOGO
-from .views import build_menu_view, build_categoria_view
+from .views import build_menu_view, build_categoria_view, build_busqueda_view
+from logic.catalogo_utils_v2 import buscar_por_codigo
 
 
 class CatalogoWidgetV2(QWidget):
@@ -16,9 +17,8 @@ class CatalogoWidgetV2(QWidget):
         self.setLayout(self.stack)
 
     def _init_menu(self):
-        opciones_principales = MENU_CONFIG
         menu_view = build_menu_view(
-            opciones=opciones_principales,
+            opciones=MENU_CONFIG,
             on_click=self._handle_menu_click,
             estilo_boton=ESTILOS['boton_menu']
         )
@@ -26,7 +26,10 @@ class CatalogoWidgetV2(QWidget):
         self.stack.addWidget(menu_view)
 
     def _handle_menu_click(self, key):
-        self._abrir_submenu(key)
+        if MENU_CONFIG[key]["tipo"] == "busqueda":
+            self._abrir_busqueda()
+        else:
+            self._abrir_submenu(key)
 
     def _abrir_submenu(self, categoria_key):
         config = MENU_CONFIG[categoria_key]
@@ -61,6 +64,16 @@ class CatalogoWidgetV2(QWidget):
             self.vistas[hoja_key] = vista
             self.stack.addWidget(vista)
         self.mostrar_vista(hoja_key)
+
+    def _abrir_busqueda(self):
+        if "busqueda" not in self.vistas:
+            vista = build_busqueda_view(
+                on_buscar=lambda codigo: buscar_por_codigo(self.sheets, codigo),
+                volver_callback=lambda: self.mostrar_vista("menu")
+            )
+            self.vistas["busqueda"] = vista
+            self.stack.addWidget(vista)
+        self.mostrar_vista("busqueda")
 
     def mostrar_vista(self, nombre):
         if nombre in self.vistas:
