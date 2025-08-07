@@ -1,8 +1,6 @@
-# ui\views.py
-
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QFrame, QSizePolicy, QLineEdit
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QFrame, QSizePolicy, QLineEdit, QMessageBox
 from PySide6.QtCore import Qt
-from logic.constants import ESTILOS, MENU_CONFIG, CAMPOS_CATALOGO, CATALOGO_ANCHOS
+from logic.constants import ESTILOS, MENU_CONFIG, CAMPOS_CATALOGO, CATALOGO_ANCHOS, CAMPOS_OCULTOS
 from logic import catalogo_utils_v2
 from logic.catalogo_utils_v2 import obtener_df_por_hoja
 from typing import Callable
@@ -28,9 +26,33 @@ def build_tabla_productos(df, campos, copiar_callback):
         label.setWordWrap(True)
         label.setFixedHeight(ESTILOS["altura_encabezado"])
         header_layout.addWidget(label)
+    header_layout.addWidget(QLabel(""))  # espacio para botón "..."
     layout_principal.addLayout(header_layout)
 
-    for i, fila in df[campos].iterrows():
+    def crear_funcion_detalle(fila_dict_local):
+        def mostrar_detalle():
+            detalles = []
+            for campo in CAMPOS_OCULTOS:
+                if campo in fila_dict_local and pd.notna(fila_dict_local[campo]):
+                    valor = fila_dict_local[campo]
+                    if isinstance(valor, (int, float)):
+                        valor = f"${valor:,.0f}".replace(",", ".")
+                    detalles.append(f"{ESTILOS['popup_detalle']['prefijo']}{campo}: {valor}")
+            icon_str = ESTILOS["popup_detalle"].get("icono", "information")
+            icon = {
+                "information": QMessageBox.Information,
+                "warning": QMessageBox.Warning,
+                "critical": QMessageBox.Critical,
+                "question": QMessageBox.Question
+            }.get(icon_str, QMessageBox.Information)
+            msg_box = QMessageBox()
+            msg_box.setIcon(icon)
+            msg_box.setWindowTitle(ESTILOS["popup_detalle"]["titulo"])
+            msg_box.setText("\n".join(detalles))
+            msg_box.exec()
+        return mostrar_detalle
+
+    for i, fila in df.iterrows():
         layout_fila = QHBoxLayout()
         estilo_fondo = ESTILOS['fila_par'] if i % 2 == 0 else ESTILOS['fila_impar']
 
@@ -40,6 +62,7 @@ def build_tabla_productos(df, campos, copiar_callback):
 
         info_fila = {}
 
+        # Botón de copiado de fila
         boton = QPushButton("📋")
         boton.setStyleSheet(ESTILOS['boton_copiar'])
         boton.setMaximumWidth(CATALOGO_ANCHOS["COPIAR"])
@@ -50,30 +73,29 @@ def build_tabla_productos(df, campos, copiar_callback):
         layout_fila.addWidget(boton)
 
         for campo in campos:
-            valor = fila[campo]
+            valor = fila.get(campo, "")
             es_numerico = False
             if isinstance(valor, (int, float)):
                 es_numerico = True
-                if "CUOTAS" in campo:
-                    cuotas = re.search(r"(\d+)", campo)
-                    if cuotas:
-                        cantidad = int(cuotas.group(1))
-                        valor_cuota = valor / cantidad
-                        valor = f"${valor:,.0f} ({cantidad}x ${valor_cuota:,.0f})"
-                    else:
-                        valor = f"${valor:,.0f}"
-                else:
-                    valor = f"${valor:,.0f}"
+                valor = f"${valor:,.0f}"
             else:
                 valor = str(valor)
 
-            valor = valor.replace(",", ".")  # Formato 100.000
+            valor = valor.replace(",", ".")
             label = QLabel(valor)
             label.setFixedWidth(CATALOGO_ANCHOS.get(campo, 100))
             label.setStyleSheet((ESTILOS.get("celda_numero") if es_numerico else ESTILOS.get("celda_texto")) or "")
             label.setFixedHeight(ESTILOS["altura_celda"])
             layout_fila.addWidget(label)
             info_fila[campo] = valor
+
+        # Botón para mostrar precios adicionales
+        btn_mas = QPushButton("⋯")
+        btn_mas.setStyleSheet(ESTILOS.get("boton_ver_mas", ""))
+        btn_mas.setFixedHeight(ESTILOS["altura_celda"])
+        btn_mas.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        btn_mas.clicked.connect(crear_funcion_detalle(fila.to_dict()))
+        layout_fila.addWidget(btn_mas)
 
         fila_widget.setLayout(layout_fila)
         layout_principal.addWidget(fila_widget)

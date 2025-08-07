@@ -52,13 +52,15 @@ CATALOGO_UI = {
 CAMPOS_CATALOGO = {
     "colchones": [
         "PROVEEDOR", "MODELO", "MEDIDA (LARG-ANCH-ESP)", "MATERIAL",
-        "SOPORTA (PorPlaza)", "EFECTIVO/TRANSF", "DEBIT/CREDIT", "3 CUOTAS", "6 CUOTAS"
+        "SOPORTA (PorPlaza)", "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ],
     "otros": [
         "CARACTERISTICAS", "MODELO",
-        "EFECTIVO/TRANSF", "DEBIT/CREDIT", "3 CUOTAS", "6 CUOTAS"
+        "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ]
 }
+
+CAMPOS_OCULTOS = ["3 CUOTAS", "6 CUOTAS"]
 
 # === ANCHOS DE COLUMNA PARA CATALOGO VISUAL ===
 CATALOGO_ANCHOS = {
@@ -79,6 +81,8 @@ CATALOGO_ANCHOS = {
 ESTILOS = {
     "boton_menu": "font-size: 16px; padding: 10px",
     "boton_copiar": "font-size: 13px; padding: 0px 2px; background-color: #aaccee; color: #000;",
+    "boton_ver_mas": "font-size: 13px; padding: 2px 6px; background-color: #ddd; color: #000;",
+    "boton_volver": "font-size: 14px; padding: 6px 10px; background-color: #ccc; color: #000; font-weight: bold;",
     "titulo_columna": "padding: 0 2px; font-size: 13px; color: black; font-family: 'Arial Narrow', Arial, sans-serif;",
     "celda_texto": "padding: 0 2px; font-size: 18px; color: black;",
     "celda_numero": "padding: 0 2px; font-size: 20px; color: black; qproperty-alignment: 'AlignRight';",
@@ -86,9 +90,13 @@ ESTILOS = {
     "fila_par": "#fff8d0",     # amarillo claro
     "fila_impar": "#f0f0f0",   # gris claro
     "padding_fila": "padding: 4px;",
-    "boton_volver": "font-size: 14px; padding: 6px 10px; background-color: #ccc; color: #000; font-weight: bold;",
     "altura_celda": 26,
-    "altura_encabezado": 32
+    "altura_encabezado": 32,
+    "popup_detalle": {
+        "titulo": "Precios adicionales",
+        "icono": "information",  # puede ser: 'information', 'warning', 'critical', 'question'
+        "prefijo": "▪ "
+    }
 }
 
 # === ESTILOS VISUALES REUTILIZABLES (MODO OSCURO) ===
@@ -106,16 +114,19 @@ MENU_CONFIG = {
     "colchones": {
         "nombre": "Colchones",
         "tipo_producto": "colchones",
+        "tipo": "categoria",
         "hojas": ["1 PLAZA", "1 PLAZA Y MEDIA", "2 PLAZAS", "QUEEN", "KING", "CUNA"]
     },
     "almohadas_sommiers": {
         "nombre": "Almohadas / Sommiers",
         "tipo_producto": "colchones",
+        "tipo": "categoria",
         "hojas": ["ALMOHADAS", "SOMMIERS"]
     },
     "otros": {
         "nombre": "Otros Productos",
         "tipo_producto": "otros",
+        "tipo": "categoria",
         "hojas": [
             "ACOLCHADOS", "ALFOMBRAS DE BAÑO", "AROMATIZADORES", "BATAS DE BAÑO",
             "CESTOS PARA ROPA", "FRAZADAS", "MUEBLES", "TOALLAS", "SABANAS", "RESPALDOS"
