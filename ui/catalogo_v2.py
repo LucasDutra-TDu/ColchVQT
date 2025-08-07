@@ -1,10 +1,10 @@
 # logic\catalogo_v2.py
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QStackedLayout
+from PySide6.QtGui import QKeySequence, QShortcut
 from logic.constants import MENU_CONFIG, ESTILOS, CAMPOS_CATALOGO
 from .views import build_menu_view, build_categoria_view, build_busqueda_view
 from logic.catalogo_utils_v2 import buscar_por_codigo
-
 
 class CatalogoWidgetV2(QWidget):
     def __init__(self, sheets):
@@ -25,6 +25,18 @@ class CatalogoWidgetV2(QWidget):
         self.vistas['menu'] = menu_view
         self.stack.addWidget(menu_view)
 
+        # Atajos del menú principal (1–0)
+        visible_keys = [k for k in MENU_CONFIG.keys() if MENU_CONFIG[k].get("tipo") in ("categoria", "busqueda")]
+        for i, key in enumerate(visible_keys[:10]):
+            key_seq = QKeySequence(str((i + 1) % 10))
+            QShortcut(key_seq, menu_view).activated.connect(self._make_menu_shortcut_handler(key))
+
+        # Escape vuelve al menú desde cualquier vista
+        QShortcut(QKeySequence("Esc"), self).activated.connect(lambda: self.mostrar_vista("menu"))
+
+    def _make_menu_shortcut_handler(self, key):
+        return lambda: self._handle_menu_click(key)
+
     def _handle_menu_click(self, key):
         if MENU_CONFIG[key]["tipo"] == "busqueda":
             self._abrir_busqueda()
@@ -38,11 +50,16 @@ class CatalogoWidgetV2(QWidget):
         submenu = QWidget()
         layout = QVBoxLayout(submenu)
 
-        for hoja in config.get("hojas", []):
+        hojas = config.get("hojas", [])
+        for i, hoja in enumerate(hojas):
             boton = QPushButton(hoja)
             boton.setStyleSheet(ESTILOS['boton_menu'])
             boton.clicked.connect(lambda _, h=hoja: self._abrir_hoja(h, tipo_producto))
             layout.addWidget(boton)
+
+            if i < 10:
+                key_seq = QKeySequence(str((i + 1) % 10))
+                QShortcut(key_seq, submenu).activated.connect(self._make_hoja_shortcut_handler(hoja, tipo_producto))
 
         boton_volver = QPushButton("Volver")
         boton_volver.setStyleSheet(ESTILOS['boton_volver'])
@@ -52,6 +69,9 @@ class CatalogoWidgetV2(QWidget):
         self.vistas[categoria_key] = submenu
         self.stack.addWidget(submenu)
         self.mostrar_vista(categoria_key)
+
+    def _make_hoja_shortcut_handler(self, hoja, tipo_producto):
+        return lambda: self._abrir_hoja(hoja, tipo_producto)
 
     def _abrir_hoja(self, hoja_key, tipo_producto):
         if hoja_key not in self.vistas:
