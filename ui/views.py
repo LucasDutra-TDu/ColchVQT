@@ -1,12 +1,14 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QFrame, QSizePolicy, QLineEdit, QMessageBox
 from PySide6.QtCore import Qt
 from logic.constants import ESTILOS, MENU_CONFIG, CAMPOS_CATALOGO, CATALOGO_ANCHOS, CAMPOS_OCULTOS
-from logic import catalogo_utils_v2
+from logic import catalogo_utils_v2, carrito
 from logic.catalogo_utils_v2 import obtener_df_por_hoja
+from ui.carrito_view import CarritoWindow, abrir_carrito, agregar_producto_y_abrir
 from typing import Callable
 from functools import partial
 import re
 import pandas as pd
+
 
 def build_tabla_productos(df, campos, copiar_callback):
     contenedor = QWidget()
@@ -27,6 +29,7 @@ def build_tabla_productos(df, campos, copiar_callback):
         label.setFixedHeight(ESTILOS["altura_encabezado"])
         header_layout.addWidget(label)
     header_layout.addWidget(QLabel(""))  # espacio para botón "..."
+    header_layout.addWidget(QLabel(""))  # espacio para botón carrito
     layout_principal.addLayout(header_layout)
 
     def crear_funcion_detalle(fila_dict_local):
@@ -97,6 +100,20 @@ def build_tabla_productos(df, campos, copiar_callback):
         btn_mas.clicked.connect(crear_funcion_detalle(fila.to_dict()))
         layout_fila.addWidget(btn_mas)
 
+        # Botón para agregar al carrito (incluyendo COSTO)
+        btn_carrito = QPushButton("🛒")
+        btn_carrito.setStyleSheet(ESTILOS.get("boton_carrito", ""))
+        btn_carrito.setFixedHeight(ESTILOS["altura_celda"])
+        btn_carrito.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+
+        fila_dict_con_costo = fila.to_dict()
+        if "COSTO" in df.columns:
+            fila_dict_con_costo["COSTO"] = fila["COSTO"]
+        btn_carrito.clicked.connect(
+            lambda _, f=fila_dict_con_costo: agregar_producto_y_abrir(f)
+        )
+        layout_fila.addWidget(btn_carrito)
+
         fila_widget.setLayout(layout_fila)
         layout_principal.addWidget(fila_widget)
 
@@ -137,6 +154,13 @@ def build_menu_view(opciones: dict, on_click: Callable[[str], None], estilo_boto
         boton.setStyleSheet(estilo_boton)
         boton.clicked.connect(lambda _, k=key: on_click(k))
         layout.addWidget(boton)
+
+    # Botón para abrir carrito
+    boton_carrito = QPushButton("🛒 Ver Carrito")
+    boton_carrito.setStyleSheet(ESTILOS['boton_volver'])
+
+    boton_carrito.clicked.connect(abrir_carrito)
+    layout.addWidget(boton_carrito)
 
     if volver_callback:
         boton_volver = QPushButton("Volver")

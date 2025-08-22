@@ -77,11 +77,27 @@ CATALOGO_ANCHOS = {
     "6 CUOTAS": 250
 }
 
+METODOS_PAGO = [
+    "EFECTIVO/TRANSF","DEBIT/CREDIT","3 CUOTAS", "6 CUOTAS"
+]
+
 # === ESTILOS VISUALES REUTILIZABLES ===
 ESTILOS = {
     "boton_menu": "font-size: 16px; padding: 10px",
     "boton_copiar": "font-size: 13px; padding: 0px 2px; background-color: #aaccee; color: #000;",
     "boton_ver_mas": "font-size: 13px; padding: 2px 6px; background-color: #ddd; color: #000;",
+    "boton_eliminar": """
+        QPushButton {
+            background-color: #e74c3c;   /* rojo */
+            color: white;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #c0392b;   /* rojo más oscuro */
+        }
+    """,
     "boton_volver": "font-size: 14px; padding: 6px 10px; background-color: #ccc; color: #000; font-weight: bold;",
     "titulo_columna": "padding: 0 2px; font-size: 13px; color: black; font-family: 'Arial Narrow', Arial, sans-serif;",
     "celda_texto": "padding: 0 2px; font-size: 18px; color: black;",
