@@ -11,6 +11,9 @@ def obtener_df_por_hoja(sheets: dict, hoja: str) -> pd.DataFrame:
     - Elimina filas completamente vacías.
     """
     df = sheets.get(hoja, pd.DataFrame()).copy()
+    if df.empty:
+        return pd.DataFrame() # Devuelve DF vacío
+        
     df.columns = df.columns.str.strip().str.upper()
     df = df.dropna(how='all')
     return df
@@ -45,7 +48,7 @@ def copiar_info_busqueda(row):
     """
     tipo = "otros"
 
-    if "MEDIDA (LARG-ANCH-ESP)" in row or "SOPORTA (PorPlaza)" in row:
+    if "MEDIDA (LARG-ANCH-ESP)" in row or "SOPORTA (PORPLAZA)" in row:
         tipo = "colchones"
 
     texto = formatear_info_para_copiar(row, tipo=tipo)
@@ -62,8 +65,8 @@ def formatear_info_para_copiar(row: pd.Series, tipo: str) -> str:
         ]
         if 'MATERIAL' in row and pd.notnull(row['MATERIAL']):
             partes.append(f"Material: '{row['MATERIAL']}'")
-        if 'SOPORTA (PorPlaza)' in row and pd.notnull(row['SOPORTA (PorPlaza)']):
-            partes.append(f"PesoSoportado: '{row['SOPORTA (PorPlaza)']}'")
+        if 'SOPORTA (PORPLAZA)' in row and pd.notnull(row['SOPORTA (PORPLAZA)']):
+            partes.append(f"PesoSoportado: '{row['SOPORTA (PORPLAZA)']}'")
 
     elif tipo == "otros":
         partes += [
@@ -71,42 +74,56 @@ def formatear_info_para_copiar(row: pd.Series, tipo: str) -> str:
             f"Modelo: {row.get('MODELO', '-')}"
         ]
 
-    for key in ['EFECTIVO/TRANSF', 'DEBIT/CREDIT', '3 CUOTAS', '6 CUOTAS']:
+    for key in ['EFECTIVO/TRANSF', 'DEBIT/CREDIT']:
         if key in row and pd.notnull(row[key]):
             partes.append(f"{key}: {row[key]}")
 
     return "\n".join(partes)
 
-def buscar_por_codigo(sheets: dict, codigo: str) -> pd.DataFrame:
+def buscar_por_nombre(sheets: dict, termino_busqueda: str) -> pd.DataFrame:
     """
-    Busca el código de producto (coincidencia parcial, insensible a mayúsculas) en las hojas 'GENERAL' y 'OTROS'.
-    Retorna un DataFrame limpio con columnas según su categoría, agregando una columna de origen.
+    Busca un término en la columna 'MODELO' de las hojas 'GENERAL' y 'OTROS'.
     """
-    if not isinstance(codigo, str):
-        codigo = str(codigo)
+    
+    if not sheets:
+        print("El diccionario de hojas está vacío.")
+        return pd.DataFrame()
 
-    resultados = []
+    # --- ¡CAMBIO CLAVE AQUÍ! ---
+    # 1. Obtenemos y LIMPIAMOS/NORMALIZAMOS las hojas ANTES de usarlas.
+    df_general = obtener_df_por_hoja(sheets, 'GENERAL')
+    df_otros = obtener_df_por_hoja(sheets, 'OTROS')
+    
+    # 2. Concatenar las hojas (ya limpias)
+    hojas_para_concatenar = []
+    if not df_general.empty:
+        hojas_para_concatenar.append(df_general)
+    if not df_otros.empty:
+        hojas_para_concatenar.append(df_otros)
 
-    for hoja, categoria in [('GENERAL', 'colchones'), ('OTROS', 'otros')]:
-        df = sheets.get(hoja, pd.DataFrame()).copy()
-        if df.empty:
-            continue
+    if not hojas_para_concatenar:
+        print("No se encontraron datos en 'GENERAL' u 'OTROS' tras la limpieza.")
+        return pd.DataFrame()
 
-        df.columns = df.columns.str.strip().str.upper()
+    try:
+        # Ahora 'df_completo' tendrá columnas normalizadas
+        df_completo = pd.concat(hojas_para_concatenar, ignore_index=True)
+    except Exception as e:
+        print(f"Error al concatenar 'GENERAL' y 'OTROS': {e}")
+        return pd.DataFrame()
+        
+    # 3. El resto de la lógica ya es correcta...
+    if 'MODELO' not in df_completo.columns:
+        print("Error: La columna 'MODELO' no se encontró en 'GENERAL' u 'OTROS'.")
+        return pd.DataFrame()
 
-        col_codigo = next((col for col in df.columns if col in ['CÓDIGO', 'CODIGO']), None)
-        if not col_codigo:
-            continue
-
-        filtrado = df[df[col_codigo].astype(str).str.contains(codigo, case=False, na=False)]
-        if filtrado.empty:
-            continue
-
-        columnas_deseadas = [col for col in CAMPOS_CATALOGO[categoria] if col in filtrado.columns]
-        vista = filtrado[columnas_deseadas].copy()
-        vista.insert(0, "ORIGEN", hoja)  # Añade columna de origen
-        resultados.append(vista)
-
-    if resultados:
-        return pd.concat(resultados, ignore_index=True)
-    return pd.DataFrame()
+    # (Asegurarse de que MODELO sea string, etc.)
+    df_completo['MODELO'] = df_completo['MODELO'].astype(str)
+    
+    df_filtrado = df_completo[
+        df_completo['MODELO'].str.contains(
+            termino_busqueda, case=False, na=False
+        )
+    ]
+    
+    return df_filtrado

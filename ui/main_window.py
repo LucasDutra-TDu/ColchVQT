@@ -9,7 +9,7 @@ class MainWindow(QMainWindow):
 
         # Configuración inicial de la ventana
         self.setWindowTitle(messages["ui"]["app_title"])
-        self.resize(1000, 800)
+        self.resize(1100, 800)
 
         # Inicializar widgets
         self.catalogo_widget = CatalogoWidgetV2(sheets)

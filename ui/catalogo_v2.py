@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QStackedLayout
 from logic.constants import MENU_CONFIG, ESTILOS, CAMPOS_CATALOGO
 from .views import build_menu_view, build_categoria_view, build_busqueda_view
-from logic.catalogo_utils_v2 import buscar_por_codigo
+from logic.catalogo_utils_v2 import buscar_por_nombre
 
 
 class CatalogoWidgetV2(QWidget):
@@ -56,6 +56,7 @@ class CatalogoWidgetV2(QWidget):
     def _abrir_hoja(self, hoja_key, tipo_producto):
         if hoja_key not in self.vistas:
             vista = build_categoria_view(
+                self,
                 key=hoja_key,
                 sheets=self.sheets,
                 volver_callback=lambda: self.mostrar_vista("menu"),
@@ -68,7 +69,8 @@ class CatalogoWidgetV2(QWidget):
     def _abrir_busqueda(self):
         if "busqueda" not in self.vistas:
             vista = build_busqueda_view(
-                on_buscar=lambda codigo: buscar_por_codigo(self.sheets, codigo),
+                self,
+                on_buscar=lambda codigo: buscar_por_nombre(self.sheets, codigo),
                 volver_callback=lambda: self.mostrar_vista("menu")
             )
             self.vistas["busqueda"] = vista

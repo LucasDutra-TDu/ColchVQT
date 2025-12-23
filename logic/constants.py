@@ -52,15 +52,13 @@ CATALOGO_UI = {
 CAMPOS_CATALOGO = {
     "colchones": [
         "PROVEEDOR", "MODELO", "MEDIDA (LARG-ANCH-ESP)", "MATERIAL",
-        "SOPORTA (PorPlaza)", "EFECTIVO/TRANSF", "DEBIT/CREDIT"
+        "SOPORTA (PORPLAZA)", "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ],
     "otros": [
         "CARACTERISTICAS", "MODELO",
         "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ]
 }
-
-CAMPOS_OCULTOS = ["3 CUOTAS", "6 CUOTAS"]
 
 # === ANCHOS DE COLUMNA PARA CATALOGO VISUAL ===
 CATALOGO_ANCHOS = {
@@ -70,11 +68,9 @@ CATALOGO_ANCHOS = {
     "CARACTERISTICAS": 250,
     "MEDIDA (LARG-ANCH-ESP)": 120,
     "MATERIAL": 100,
-    "SOPORTA (PorPlaza)": 90,
+    "SOPORTA (PORPLAZA)": 90,
     "EFECTIVO/TRANSF": 95,
-    "DEBIT/CREDIT": 95,
-    "3 CUOTAS": 250,
-    "6 CUOTAS": 250
+    "DEBIT/CREDIT": 95
 }
 
 # === ESTILOS VISUALES REUTILIZABLES ===
@@ -93,9 +89,8 @@ ESTILOS = {
     "altura_celda": 26,
     "altura_encabezado": 32,
     "popup_detalle": {
-        "titulo": "Precios adicionales",
-        "icono": "information",  # puede ser: 'information', 'warning', 'critical', 'question'
-        "prefijo": "▪ "
+        "titulo": "Crédito de La Casa",
+        "icono": "information"
     }
 }
 
@@ -133,7 +128,7 @@ MENU_CONFIG = {
         ]
     },
     "busqueda": {
-        "nombre": "Buscar por código",
+        "nombre": "Buscar por nombre",
         "tipo": "busqueda"
     }
 }
