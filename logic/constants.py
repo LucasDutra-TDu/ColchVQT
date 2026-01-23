@@ -133,6 +133,16 @@ MENU_CONFIG = {
     }
 }
 
+# Definición del Mapeo para el Portapapeles (Constante)
+MAPEO_CLIPBOARD = [
+    ("PROVEEDOR", "Marca"),
+    ("MODELO", "Modelo"),
+    ("MEDIDA (LARG-ANCH-ESP)", "Medida"),
+    ("MATERIAL", "Material"),
+    ("SOPORTA (PORPLAZA)", "PesoSoportado"),
+    ("CARACTERISTICAS", "Detalle")
+]
+
 # Tasa de interés mensual para "Crédito de la Casa" (8%)
 TASA_INTERES_MENSUAL = 0.08 
 

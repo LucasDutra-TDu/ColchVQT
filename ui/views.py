@@ -11,68 +11,94 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 # Imports Propios
-from logic.constants import ESTILOS, CAMPOS_CATALOGO, CATALOGO_ANCHOS
+from logic.constants import ESTILOS, CAMPOS_CATALOGO, CATALOGO_ANCHOS, MAPEO_CLIPBOARD
 from logic import catalogo_service
 # Importamos la nueva lógica financiera
 from logic.financiero import calcular_plan_cuotas, format_currency, generar_texto_clipboard
 from logic.cart_service import CartService
 
-# Definición del Mapeo para el Portapapeles (Constante)
-MAPEO_CLIPBOARD = [
-    ("PROVEEDOR", "Marca"),
-    ("MODELO", "Modelo"),
-    ("MEDIDA (LARG-ANCH-ESP)", "Medida"),
-    ("MATERIAL", "Material"),
-    ("SOPORTA (PORPLAZA)", "PesoSoportado"),
-    ("CARACTERISTICAS", "Detalle")
-]
-
 def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
     """Manejador del evento de cálculo de cuotas (Controller Logic)."""
     
-    # 1. Validación
+    # --- CORRECCIÓN: IMPORTAR AL INICIO ---
+    # Esto evita el UnboundLocalError y asegura que las funciones estén disponibles desde la línea 1
+    from logic.financiero import format_currency, generar_texto_clipboard, TASA_INTERES_MENSUAL
+    import math # Necesario para el math.ceil
+    
+    # 1. Validación del Precio Base
     precio_base_val = fila_data.get("EFECTIVO/TRANSF")
-    if not precio_base_val or pd.isna(precio_base_val):
-        QMessageBox.warning(parent, "Error", "Sin precio base válido.")
-        return
+    if not precio_base_val:
+        precio_base_val = fila_data.get("PRECIO", fila_data.get("CONTADO", 0))
 
     try:
         precio_base = float(precio_base_val)
     except (ValueError, TypeError):
-        QMessageBox.warning(parent, "Error", "Formato de precio inválido.")
+        QMessageBox.warning(parent, "Error de Datos", f"El producto no tiene un precio base válido.\nValor: {precio_base_val}")
         return
 
-    # 2. Interacción Usuario
+    # 2. Interacción Usuario (Seleccionar Cuotas)
+    cuotas_opciones = [str(i) for i in range(3, 13)]
+    
+    # AHORA SÍ: format_currency ya está definido aquí
     cuotas_str, ok = QInputDialog.getItem(
-        parent, "Calcular Cuotas", "Seleccione cuotas:",
-        [str(i) for i in range(3, 13)], 0, False
+        parent, "Calcular Cuotas", 
+        f"Precio Base: {format_currency(precio_base)}\n\nSeleccione cantidad de cuotas:",
+        cuotas_opciones, 0, False
     )
 
     if ok and cuotas_str:
-        # 3. Delegación a Lógica Pura
-        plan = calcular_plan_cuotas(precio_base, int(cuotas_str))
+        try:
+            # 3. Lógica Financiera (Inline segura)
+            num_cuotas = int(cuotas_str)
+            tasa = TASA_INTERES_MENSUAL * num_cuotas # 8% mensual
+            precio_final = precio_base * (1 + tasa)
+            
+            # Regla de redondeo a 100
+            valor_cuota = math.ceil((precio_final / num_cuotas) / 100) * 100
+            precio_final_redondeado = valor_cuota * num_cuotas
 
-        # 4. Construcción de UI del Popup
-        texto_html = (
-            f"<b>Precio Lista:</b> {format_currency(plan['precio_base'])}<hr>"
-            f"<b>Plan:</b> {plan['num_cuotas']} cuotas<br>"
-            f"<b>Precio Final:</b> {format_currency(plan['precio_final'])}<hr>"
-            f"<h3>Valor Cuota: {format_currency(plan['valor_cuota'])}</h3>"
-        )
+            plan = {
+                "num_cuotas": num_cuotas,
+                "precio_base": precio_base,
+                "precio_final": precio_final_redondeado,
+                "valor_cuota": valor_cuota
+            }
 
-        msg_box = QMessageBox(parent)
-        msg_box.setWindowTitle("Detalle de Financiación")
-        msg_box.setTextFormat(Qt.RichText)
-        msg_box.setText(texto_html)
-        
-        btn_copiar = msg_box.addButton("Copiar Plan", QMessageBox.ActionRole)
-        msg_box.addButton("Cerrar", QMessageBox.RejectRole)
-        msg_box.setDefaultButton(btn_copiar)
-        msg_box.exec()
+            # 4. Construcción de UI del Popup
+            texto_html = (
+                f"<h3 style='color:#2c3e50;'>Plan Crédito de la Casa</h3>"
+                f"<hr>"
+                f"<b>Precio Lista:</b> {format_currency(precio_base)}<br>"
+                f"<b>Recargo:</b> {int(tasa*100)}% ({num_cuotas} meses x {int(TASA_INTERES_MENSUAL*100)}%)"
+                f"<hr>"
+                f"<table width='100%'>"
+                f"<tr><td><b>Cuotas:</b></td><td align='right'>{plan['num_cuotas']}</td></tr>"
+                f"<tr><td><b>Valor Cuota:</b></td><td align='right' style='font-size:14px; color:blue;'><b>{format_currency(plan['valor_cuota'])}</b></td></tr>"
+                f"<tr><td><b>Total Final:</b></td><td align='right'>{format_currency(plan['precio_final'])}</td></tr>"
+                f"</table>"
+            )
 
-        if msg_box.clickedButton() == btn_copiar:
-            texto_plano = generar_texto_clipboard(fila_data, plan, MAPEO_CLIPBOARD)
-            QApplication.clipboard().setText(texto_plano)
+            msg_box = QMessageBox(parent)
+            msg_box.setWindowTitle(f"Financiación {num_cuotas} Cuotas")
+            msg_box.setTextFormat(Qt.RichText)
+            msg_box.setText(texto_html)
+            
+            btn_copiar = msg_box.addButton("Copiar Plan", QMessageBox.ActionRole)
+            msg_box.addButton("Cerrar", QMessageBox.RejectRole)
+            msg_box.setDefaultButton(btn_copiar)
+            
+            msg_box.exec()
+
+            # 5. Copiar
+            if msg_box.clickedButton() == btn_copiar:
+                # Usamos MAPEO_CLIPBOARD global del archivo views.py
+                texto_plano = generar_texto_clipboard(fila_data, plan, MAPEO_CLIPBOARD)
+                QApplication.clipboard().setText(texto_plano)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(parent, "Error de Cálculo", f"Error:\n{str(e)}")
 
 def build_tabla_productos(parent_window, df, campos, copiar_callback, cart_service: CartService):
     """Construye la tabla con botón de Carrito incluido."""

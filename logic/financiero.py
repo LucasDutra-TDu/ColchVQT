@@ -47,7 +47,7 @@ def calcular_plan_cuotas(precio_base: float, num_cuotas: int) -> dict:
     Calcula el precio final financiado y el valor de la cuota.
     Aplica redondeo a la centena superior (Business Rule).
     """
-    tasa_interes_total = RECARGO_SIMPLE_POR_CUOTA * num_cuotas
+    tasa_interes_total = TASA_INTERES_MENSUAL * num_cuotas
     precio_total_financiado = precio_base * (1 + tasa_interes_total)
     
     valor_cuota_raw = precio_total_financiado / num_cuotas

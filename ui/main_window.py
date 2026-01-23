@@ -23,9 +23,9 @@ class MainWindow(QMainWindow):
         self.cart_service.cart_updated.connect(self._on_cart_update)
 
         self.setWindowTitle("Sistema de Gestión - ColchVQT")
-        self.resize(1100, 800)
+        self.resize(1200, 800)
 
-        # --- Toolbar Superior ---
+        # --- Toolbar Superior --- 
         toolbar = QToolBar("Barra Principal")
         self.addToolBar(toolbar)
 
