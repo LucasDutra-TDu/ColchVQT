@@ -51,14 +51,21 @@ def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total
     ganancia_total = 0.0
 
     for item in items_carrito:
-        # Extraemos datos críticos. Asumimos que el controlador ya preparó estos datos
-        # o que vienen del CartService enriquecidos.
-        cantidad = item.get("cantidad", 1)
+        cantidad = int(item.get("cantidad", 1))
         
-        # IMPORTANTE: El precio unitario real al que se vendió debe venir calculado
+        # Precio al que se vendió (puede tener recargos de tarjeta/crédito)
         precio_unitario = float(item.get("precio_venta_final", 0)) 
-        costo_unitario = float(item.get("COSTO", 0)) # Costo base del proveedor
         
+        # Costo interno
+        costo_unitario = float(item.get("COSTO", 0)) 
+        
+        # --- NUEVO: Precio Base para cálculo de comisiones ---
+        # Intentamos obtener "EFECTIVO/TRANSF", si no existe (ej: producto manual), usamos el unitario.
+        precio_base_ref = float(item.get("EFECTIVO/TRANSF", 0))
+        if precio_base_ref == 0:
+             precio_base_ref = float(item.get("PRECIO", precio_unitario))
+        # -----------------------------------------------------
+
         ganancia_item = (precio_unitario - costo_unitario) * cantidad
         ganancia_total += ganancia_item
 
@@ -68,7 +75,8 @@ def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total
             "descripcion": item.get("CARACTERISTICAS", ""),
             "cantidad": cantidad,
             "precio_unitario": precio_unitario,
-            "costo_historico": costo_unitario 
+            "costo_historico": costo_unitario,
+            "precio_lista_base": precio_base_ref
         })
 
     items_json = json.dumps(items_to_store, ensure_ascii=False)

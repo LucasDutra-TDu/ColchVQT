@@ -7,6 +7,8 @@ from ui.catalogo_view import CatalogoView
 from ui.cart_window import CartWindow
 from ui.history_window import HistoryWindow
 from logic.cart_service import CartService
+from ui.credits_window import CreditsWindow
+from ui.stats_window import StatsWindow     
 
 class MainWindow(QMainWindow):
     def __init__(self, data_context: Dict[str, Any], cart_service: CartService):
@@ -17,6 +19,8 @@ class MainWindow(QMainWindow):
         # Referencias a ventanas secundarias (para no abrirlas mil veces)
         self.w_carrito = None
         self.w_historial = None
+        self.w_creditos = None
+        self.w_stats = None
 
         # --- CONEXIÓN DE SEÑAL AUTOMÁTICA ---
         # Cada vez que el servicio diga "cambié", ejecutamos _on_cart_update
@@ -34,10 +38,15 @@ class MainWindow(QMainWindow):
         action_cart.triggered.connect(self.abrir_carrito)
         toolbar.addAction(action_cart)
 
-        # Acción: Ver Historial
-        action_hist = QAction("📜 Historial Ventas", self)
-        action_hist.triggered.connect(self.abrir_historial)
-        toolbar.addAction(action_hist)
+        # Acción: Créditos Activos
+        action_cred = QAction("💸 Créditos Activos", self)
+        action_cred.triggered.connect(self.abrir_creditos)
+        toolbar.addAction(action_cred)
+
+        # Acción: Estadísticas
+        action_stats = QAction("📊 Estadísticas", self)
+        action_stats.triggered.connect(self.abrir_stats)
+        toolbar.addAction(action_stats)
 
         # --- Stack Central (Catálogo) ---
         self.stack = QStackedWidget()
@@ -87,3 +96,11 @@ class MainWindow(QMainWindow):
         # El historial se recarga solo al iniciarse
         self.w_historial = HistoryWindow(self)
         self.w_historial.show()
+
+    def abrir_creditos(self):
+        self.w_creditos = CreditsWindow(self)
+        self.w_creditos.show()
+
+    def abrir_stats(self):
+        self.w_stats = StatsWindow(self)
+        self.w_stats.show()
