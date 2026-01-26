@@ -41,42 +41,42 @@ def calcular_plan_credito(precio_base: float, num_cuotas: int) -> dict:
         "interes_total": precio_final_real - precio_base
     }
 
-def calcular_comisiones(metodo_pago: str, precio_lista_base: float, precio_venta_final: float) -> dict:
+def calcular_comisiones(metodo_pago: str, base_capital: float, monto_total: float) -> dict:
     """
-    Calcula la distribución de ganancia según el método de pago [Ref 3].
-    
     Args:
-        metodo_pago: 'Efectivo...', 'Tarjeta...', 'Crédito...'
-        precio_lista_base: El valor de la columna 'EFECTIVO/TRANSF'.
-        precio_venta_final: El valor al que realmente se vendió.
+        base_capital: Precio Efectivo/Lista (ej: 100).
+        monto_total: Precio Final con recargos (ej: 115).
     """
     distribucion = {
-        "empresa": 0,
-        "gerente": 0,
-        "vendedor": 0
+        "empresa": 0.0,
+        "gerente": 0.0,
+        "vendedor": 0.0
     }
 
-    if "Efectivo" in metodo_pago or "Transferencia" in metodo_pago:
-        # [A] Base: Precio EFECTIVO/TRANSF
-        base = precio_lista_base
+    # Normalización
+    metodo = metodo_pago.lower()
+    
+    es_credito_casa = "casa" in metodo or ("credito" in metodo and "tarjeta" not in metodo)
+    
+    if es_credito_casa:
+        # Lógica Crédito de la Casa (Comisión sobre interés)
+        interes = max(0, monto_total - base_capital)
+        distribucion["gerente"] = (base_capital * 0.04) + (interes * 0.10)
+        distribucion["vendedor"] = (base_capital * 0.03) + (interes * 0.08)
+        distribucion["empresa"] = monto_total - (distribucion["gerente"] + distribucion["vendedor"])
+
+    elif "tarjeta" in metodo or "debito" in metodo or "débito" in metodo:
+        # Lógica Tarjeta (Comisión SOLO sobre la base, el recargo no comisiona)
+        base = base_capital
         distribucion["gerente"] = base * 0.04
         distribucion["vendedor"] = base * 0.03
-        distribucion["empresa"] = base - (distribucion["gerente"] + distribucion["vendedor"])
+        distribucion["empresa"] = base - (distribucion["gerente"] + distribucion["vendedor"]) 
 
-    elif "Tarjeta" in metodo_pago or "Debito" in metodo_pago:
-        # [B] Base: Precio EFECTIVO/TRANSF (El sobreprecio es costo de banco)
-        # El precio_venta_final aquí es el de LISTA/TARJETA.
-        # La diferencia (precio_venta_final - precio_lista_base) se la lleva el banco/tarjeta.
-        base = precio_lista_base
+    else:
+        # Efectivo / Transferencia
+        base = base_capital
         distribucion["gerente"] = base * 0.04
         distribucion["vendedor"] = base * 0.03
-        distribucion["empresa"] = base - (distribucion["gerente"] + distribucion["vendedor"])
-
-    elif "Crédito" in metodo_pago:
-        # [C] Base: Precio Final con Intereses ya aplicados
-        base = precio_venta_final
-        distribucion["gerente"] = base * 0.10
-        distribucion["vendedor"] = base * 0.08
         distribucion["empresa"] = base - (distribucion["gerente"] + distribucion["vendedor"])
 
     return distribucion

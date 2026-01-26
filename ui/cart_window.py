@@ -14,7 +14,7 @@ from logic.cart_service import CartService
 from logic.facturas_db_handler import registrar_venta
 from logic.financiero import format_currency, calcular_plan_credito
 from logic.credits_service import registrar_plan_credito
-from logic.pdf_service import generar_contrato_pdf, generar_desglose_pdf
+from logic.pdf_service import generar_documentacion_credito
 
 # --- Diálogo para pedir Datos del Cliente ---
 class ClienteFormDialog(QDialog):
@@ -236,9 +236,14 @@ class CartWindow(QWidget):
             texto_total = f"Total Financiado: {format_currency(total_final)} ({cuotas} x {format_currency(v_cuota)})"
         
         elif "Tarjeta" in metodo:
-             # Si tu lógica de tarjeta es precio de lista simple:
+             # "DEBIT/CREDIT"
              total_tarjeta = sum(float(i.get("DEBIT/CREDIT", 0)) * i.get("cantidad", 1) for i in items)
-             texto_total = f"Total Lista: {format_currency(total_tarjeta)}"
+             
+             # Fallback visual si devuelve 0
+             if total_tarjeta == 0:
+                 total_tarjeta = total_base
+
+             texto_total = f"Total Lista (Tarjeta): {format_currency(total_tarjeta)}"
              self.plan_credito_actual = None
              
         else:
@@ -248,97 +253,95 @@ class CartWindow(QWidget):
         self.lbl_total.setText(texto_total)
 
     def _handle_finalizar(self):
-        if self.cart_service.get_count() == 0: return
+        # 1. Validación inicial
+        if self.cart_service.get_count() == 0:
+            QMessageBox.warning(self, "Carrito Vacío", "No hay productos para facturar.")
+            return
 
-        metodo = self.combo_metodo.currentText()
-        cliente_data = {}
-        
-        # 1. Si es Crédito, pedir datos
-        if metodo == "Crédito de la Casa":
-            dlg = ClienteFormDialog(self)
-            if dlg.exec() == QDialog.Accepted:
-                cliente_data = dlg.datos
-            else:
-                return # Cancelado por usuario
-
-        # 2. Confirmación
-        confirm = QMessageBox.question(self, "Confirmar", "¿Finalizar venta?", QMessageBox.Yes|QMessageBox.No)
-        if confirm != QMessageBox.Yes: return
+        # Evitar doble click accidental
+        sender = self.sender()
+        if sender: sender.setEnabled(False)
 
         try:
-            # 3. Guardar Venta (Factura General)
-            # Preparamos items. Si es crédito, el precio unitario final es el financiado prorrateado
+            metodo = self.combo_metodo.currentText()
+            cliente_data = {}
+            
+            # --- Recolección de Datos ---
+            if metodo == "Crédito de la Casa":
+                dlg = ClienteFormDialog(self)
+                if dlg.exec() == QDialog.Accepted:
+                    cliente_data = dlg.datos
+                else:
+                    # Si cancela el dialog, reactivamos botón
+                    if sender: sender.setEnabled(True) 
+                    return 
+
+            # --- Construcción del Resumen ---
             items_checkout = self.cart_service.preparar_checkout()
             
+            detalle_msg = f"<b>Método:</b> {metodo}<br><hr>"
+            total_calc = 0
+            
             if metodo == "Crédito de la Casa" and self.plan_credito_actual:
-                total_venta = self.plan_credito_actual['precio_final']
-                # Ajustar precios unitarios en los items para que coincidan con el total financiado
-                # (Simplificación: guardamos el item con su precio base, pero la factura con el total financiado)
+                 # ... (Lógica de resumen crédito igual que antes) ...
+                 plan = self.plan_credito_actual
+                 for item in items_checkout:
+                     detalle_msg += f"• {item['cantidad']} x {item['MODELO']}<br>"
+                 detalle_msg += f"<hr><b>Plan:</b> {plan['num_cuotas']} cuotas de {format_currency(plan['valor_cuota'])}<br>"
+                 detalle_msg += f"<b style='font-size:14px'>Total Financiado: {format_currency(plan['precio_final'])}</b>"
+                 total_venta = plan['precio_final']
+            
             else:
-                # Recalcular total real basado en items_checkout
-                total_venta = sum(i['precio_venta_final'] * i['cantidad'] for i in items_checkout)
+                # ... (Lógica de resumen contado igual que antes) ...
+                for item in items_checkout:
+                    p_unit = item['precio_venta_final']
+                    subtot = p_unit * item['cantidad']
+                    total_calc += subtot
+                    detalle_msg += f"• {item['cantidad']} x {item['MODELO']} ({format_currency(subtot)})<br>"
+                
+                detalle_msg += f"<hr><b style='font-size:14px'>Total a Pagar: {format_currency(total_calc)}</b>"
+                total_venta = total_calc
 
+            # --- Confirmación ---
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Confirmar Venta")
+            msg_box.setText("<h3>¿Confirmar la operación?</h3>")
+            msg_box.setInformativeText(detalle_msg)
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            
+            if msg_box.exec() != QMessageBox.Yes:
+                # Si dice que NO, reactivamos botón
+                if sender: sender.setEnabled(True)
+                return
+
+            # --- Procesamiento ---
             factura_id = registrar_venta(items_checkout, metodo, total_venta)
 
-            # 4. Si es Crédito: Generar Contratos y Registrar Deuda
             if metodo == "Crédito de la Casa":
-                # A. Registrar en DB Créditos
                 registrar_plan_credito(factura_id, cliente_data, self.plan_credito_actual)
-                
-                # B. Generar PDFs
-                path_contrato = generar_contrato_pdf(cliente_data, items_checkout, self.plan_credito_actual)
-                path_desglose = generar_desglose_pdf(cliente_data, self.plan_credito_actual)
+                path_contrato = generar_documentacion_credito(cliente_data, items_checkout, self.plan_credito_actual)
                 
                 QMessageBox.information(self, "Éxito", 
-                    f"Venta Crédito Registrada.\n\nDocumentos generados en:\n{path_contrato}\n{path_desglose}")
-                
-                # Intentar abrir carpeta
-                os.startfile(os.path.dirname(path_contrato))
-            
+                    f"Venta Crédito Registrada.\n\nDocumentos generados en:\n{path_contrato}")
+                try:
+                    os.startfile(os.path.dirname(path_contrato))
+                except:
+                    pass
             else:
                 QMessageBox.information(self, "Éxito", "Venta registrada correctamente.")
 
+            # Limpieza FINAL
             self.cart_service.limpiar_carrito()
+            
+            # --- CORRECCIÓN AQUÍ: Reactivar botón antes de cerrar ---
+            if sender: sender.setEnabled(True) 
+            # --------------------------------------------------------
+            
             self.close()
 
         except Exception as e:
             import traceback
             traceback.print_exc()
-            QMessageBox.critical(self, "Error", f"Fallo al procesar: {e}")
-        """Orquesta la transacción final."""
-        if self.cart_service.get_count() == 0:
-            QMessageBox.warning(self, "Carrito Vacío", "No hay productos para facturar.")
-            return
-
-        # 1. Confirmación
-        total = self.cart_service.obtener_total()
-        resp = QMessageBox.question(
-            self, "Confirmar Compra", 
-            f"¿Desea finalizar la venta por un total de {format_currency(total)}?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if resp != QMessageBox.Yes:
-            return
-
-        try:
-            # 2. Preparación de Datos (Usando el nuevo método del servicio)
-            items_checkout = self.cart_service.preparar_checkout()
-            metodo = self.cart_service.get_metodo_pago()
-            
-            # 3. Persistencia (Invoice Service)
-            factura_id = registrar_venta(items_checkout, metodo, total)
-            
-            # 4. Limpieza y Feedback
-            self.cart_service.limpiar_carrito()
-            self.actualizar_tabla()
-            
-            QMessageBox.information(
-                self, "Venta Exitosa", 
-                f"La venta ha sido registrada correctamente.\nID Factura: #{factura_id}"
-            )
-            # Opcional: Cerrar ventana
-            self.close()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error de Transacción", f"No se pudo registrar la venta:\n{e}")
+            QMessageBox.critical(self, "Error Crítico", f"Fallo al procesar: {e}")
+            # En caso de error, siempre reactivar
+            if sender: sender.setEnabled(True)

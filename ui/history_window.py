@@ -1,52 +1,82 @@
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTableView, QPushButton, QLabel, QDialog, QDialogButtonBox,
-    QFormLayout, QDateEdit, QMessageBox, QHeaderView
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTableView, 
+    QPushButton, QLabel, QHeaderView, QAbstractItemView, QMessageBox,
+    QDialog, QFormLayout, QDialogButtonBox
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt
 
-# Imports de Lógica
-from logic import facturas_db_handler
+# Lógica
+from logic.facturas_db_handler import obtener_historial, buscar_por_fecha
 from logic.financiero import format_currency
+from logic.credits_service import obtener_id_credito_por_factura # <--- NUEVO
+from ui.widgets import MonthYearSelector
+
+# Diálogos
+from ui.credits_window import CreditDetailDialog # <--- NUEVO
 
 class DetalleFacturaDialog(QDialog):
+    # ... (El código de DetalleFacturaDialog que te pasé antes se mantiene IGUAL) ...
+    # ... (Si no lo tienes a mano, avísame, pero asumo que ya está pegado de la respuesta anterior) ...
+    # Asegúrate de incluir la clase DetalleFacturaDialog aquí o importarla si la moviste.
     def __init__(self, factura, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Detalle Factura #{factura['id']}")
-        self.resize(400, 500)
-        
+        self.resize(450, 550)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         
-        # --- Cabecera ---
-        layout.addWidget(QLabel(f"<b>Fecha:</b> {factura['fecha']}"))
-        layout.addWidget(QLabel(f"<b>Método:</b> {factura['metodo_pago']}"))
-        layout.addWidget(QLabel("<hr>"))
-
-        # --- Items ---
-        items = factura.get("items", [])
-        for item in items:
-            # Recuperamos datos guardados en el snapshot
-            nombre = f"{item.get('modelo', '')} {item.get('descripcion', '')}"
-            cant = item.get("cantidad", 1)
-            p_unit = item.get("precio_unitario", 0)
-            
-            detalles = f"{cant} x {format_currency(p_unit)}"
-            form.addRow(QLabel(nombre), QLabel(detalles))
-
+        lbl_fecha = QLabel(f"{factura['fecha']}")
+        lbl_metodo = QLabel(f"<b>{factura['metodo_pago']}</b>")
+        form.addRow("Fecha:", lbl_fecha)
+        form.addRow("Método:", lbl_metodo)
         layout.addLayout(form)
         layout.addWidget(QLabel("<hr>"))
 
-        # --- Totales ---
-        lbl_total = QLabel(f"TOTAL: {format_currency(factura['total'])}")
-        lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: green;")
-        layout.addWidget(lbl_total, alignment=Qt.AlignRight)
+        items = factura.get("items", [])
+        total_base_acumulado = 0
+        total_final_acumulado = 0
 
-        # Ganancia (Solo visible para admin/gerente en teoría)
-        ganancia = factura.get("ganancia", 0)
-        layout.addWidget(QLabel(f"Margen: {format_currency(ganancia)}"), alignment=Qt.AlignRight)
+        for item in items:
+            nombre = f"{item.get('modelo', '')} {item.get('descripcion', '')}"
+            cant = int(item.get("cantidad", 1))
+            p_unit_final = float(item.get("precio_unitario", 0))
+            p_unit_base = float(item.get("precio_lista_base", p_unit_final))
+            
+            total_base_acumulado += p_unit_base * cant
+            total_final_acumulado += p_unit_final * cant
 
+            detalles_txt = f"{cant} x {format_currency(p_unit_final)}"
+            if p_unit_base < p_unit_final:
+                detalles_txt += f" <small style='color:gray'>(Base: {format_currency(p_unit_base)})</small>"
+            
+            form_item = QFormLayout()
+            form_item.addRow(QLabel(f"• {nombre}"), QLabel(detalles_txt))
+            layout.addLayout(form_item)
+
+        layout.addWidget(QLabel("<hr>"))
+        footer_layout = QFormLayout()
+        diferencia = total_final_acumulado - total_base_acumulado
+        if diferencia > 1: 
+            lbl_base = QLabel(format_currency(total_base_acumulado))
+            lbl_base.setStyleSheet("color: #555;")
+            footer_layout.addRow("Subtotal Base (Efectivo):", lbl_base)
+            
+            lbl_gastos = QLabel(format_currency(diferencia))
+            lbl_gastos.setStyleSheet("color: #c0392b; font-weight: bold;")
+            
+            etiqueta_gasto = "Interés / Recargo:"
+            if "Tarjeta" in factura['metodo_pago'] or "Debito" in factura['metodo_pago']:
+                etiqueta_gasto = "Gastos Bancarios / Tarjeta:"
+            elif "Crédito" in factura['metodo_pago']:
+                etiqueta_gasto = "Interés Financiación:"
+            footer_layout.addRow(etiqueta_gasto, lbl_gastos)
+            footer_layout.addRow(QLabel("----------------"), QLabel("----------------"))
+
+        lbl_total = QLabel(format_currency(factura['total']))
+        lbl_total.setStyleSheet("font-size: 18px; font-weight: bold; color: green;")
+        footer_layout.addRow("TOTAL COBRADO:", lbl_total)
+        layout.addLayout(footer_layout)
         botones = QDialogButtonBox(QDialogButtonBox.Ok)
         botones.accepted.connect(self.accept)
         layout.addWidget(botones)
@@ -61,91 +91,83 @@ class HistoryWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
 
-        # --- Barra Superior ---
-        search_layout = QHBoxLayout()
+        # Filtros
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Filtrar por Mes:"))
+        self.selector_fecha = MonthYearSelector()
+        self.selector_fecha.dateChanged.connect(self.cargar_datos) 
+        filter_layout.addWidget(self.selector_fecha)
+        filter_layout.addStretch()
         
-        self.date_edit = QDateEdit()
-        self.date_edit.setCalendarPopup(True)
-        self.date_edit.setDisplayFormat("yyyy-MM-dd")
-        self.date_edit.setDate(QDate.currentDate())
-        
-        btn_buscar = QPushButton("Buscar por Fecha")
-        btn_buscar.clicked.connect(self.buscar_por_fecha)
+        btn_refresh = QPushButton("Recargar Todo")
+        btn_refresh.clicked.connect(self.cargar_todos)
+        filter_layout.addWidget(btn_refresh)
+        layout.addLayout(filter_layout)
 
-        btn_reload = QPushButton("Ver Todas")
-        btn_reload.clicked.connect(self.cargar_facturas)
-
-        search_layout.addWidget(QLabel("Filtrar Fecha:"))
-        search_layout.addWidget(self.date_edit)
-        search_layout.addWidget(btn_buscar)
-        search_layout.addWidget(btn_reload)
-        search_layout.addStretch()
-        
-        layout.addLayout(search_layout)
-
-        # --- Tabla ---
+        # Tabla
         self.table = QTableView()
-        self.table.setEditTriggers(QTableView.NoEditTriggers) # Solo lectura
-        self.table.setSelectionBehavior(QTableView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(["ID", "Fecha", "Método Pago", "Total", "Ganancia"])
+        # --- CAMBIO: Quitamos 'Ganancia' ---
+        self.model.setHorizontalHeaderLabels(["ID", "Fecha", "Método", "Total", "Items Resumen"])
         self.table.setModel(self.model)
         
-        # Estética de tabla
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch) # Fecha estirada
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.table.setColumnWidth(0, 50)
         
+        # Conectar Doble Click
         self.table.doubleClicked.connect(self.abrir_detalle)
+        
         layout.addWidget(self.table)
+        self.datos_actuales = [] # Para guardar referencia de objetos completos
+        self.cargar_datos()
 
-        self.cargar_facturas()
-
-    def cargar_facturas(self):
-        try:
-            data = facturas_db_handler.obtener_historial()
-            self._llenar_tabla(data)
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error cargando base de datos:\n{e}")
-
-    def buscar_por_fecha(self):
-        fecha_str = self.date_edit.date().toString("yyyy-MM-dd")
-        data = facturas_db_handler.buscar_por_fecha(fecha_str)
-        self._llenar_tabla(data)
-
-    def _llenar_tabla(self, data):
+    def _llenar_tabla(self, facturas):
+        self.datos_actuales = facturas # Guardamos la lista cruda para usarla en el detalle
         self.model.removeRows(0, self.model.rowCount())
-        for f in data:
-            item_id = QStandardItem(str(f["id"]))
-            item_fecha = QStandardItem(str(f["fecha"]))
-            item_metodo = QStandardItem(str(f["metodo_pago"]))
+        
+        for f in facturas:
+            item_id = QStandardItem(str(f['id']))
+            item_fecha = QStandardItem(f['fecha'])
+            item_metodo = QStandardItem(f['metodo_pago'])
+            item_total = QStandardItem(format_currency(f['total']))
             
-            # Formateo de moneda
-            item_total = QStandardItem(format_currency(f["total"]))
-            item_total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            # Resumen de items
+            items_str = ", ".join([f"{i.get('cantidad',1)}x {i.get('modelo','')}" for i in f.get('items', [])])
+            item_resumen = QStandardItem(items_str)
             
-            item_ganancia = QStandardItem(format_currency(f.get("ganancia", 0)))
-            item_ganancia.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.model.appendRow([item_id, item_fecha, item_metodo, item_total, item_resumen])
 
-            self.model.appendRow([item_id, item_fecha, item_metodo, item_total, item_ganancia])
+    def cargar_datos(self):
+        mes, anio = self.selector_fecha.get_date()
+        fecha_filtro = f"{anio}-{mes:02d}"
+        facturas = buscar_por_fecha(fecha_filtro)
+        self._llenar_tabla(facturas)
+
+    def cargar_todos(self):
+        facturas = obtener_historial()
+        self._llenar_tabla(facturas)
 
     def abrir_detalle(self, index):
         row = index.row()
-        id_str = self.model.item(row, 0).text()
-        # Buscamos en la DB de nuevo para tener el objeto completo con items
-        # (O podríamos guardar el objeto en la fila, pero consultar es más seguro)
-        # Nota: obtener_historial devuelve lista, aquí hacemos una query rápida si existiera 'obtener_una'
-        # Por simplicidad, recargamos el historial filtrado o usamos un helper.
-        # Vamos a iterar lo que ya tenemos en memoria del servicio sería lo ideal, 
-        # pero para ser robustos, añadimos 'obtener_factura_por_id' al servicio.
+        factura = self.datos_actuales[row] # Obtenemos el objeto completo
+        metodo = factura['metodo_pago']
         
-        # Como no añadimos 'obtener_factura_por_id' explícitamente en el paso anterior,
-        # usaremos un truco visual o asumimos que la data está.
-        # Implementemos un filtrado rápido en el servicio o recuperemos.
-        # AGREGADO AD-HOC:
-        todas = facturas_db_handler.obtener_historial()
-        factura = next((f for f in todas if str(f["id"]) == id_str), None)
+        # --- CAMBIO: Lógica de Derivación ---
+        # Verificamos si es "Crédito de la Casa" usando la misma lógica robusta que en financiero
+        es_credito = "Casa" in metodo or ("Crédito" in metodo and "Tarjeta" not in metodo)
         
-        if factura:
+        if es_credito:
+            # Buscamos el ID real del crédito en la otra tabla
+            credito_id = obtener_id_credito_por_factura(factura['id'])
+            if credito_id:
+                dlg = CreditDetailDialog(credito_id, self)
+                dlg.exec()
+            else:
+                QMessageBox.warning(self, "Error", "No se encontró el expediente de crédito asociado.")
+        else:
+            # Es venta normal (Contado o Tarjeta)
             dlg = DetalleFacturaDialog(factura, self)
             dlg.exec()

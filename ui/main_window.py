@@ -48,6 +48,11 @@ class MainWindow(QMainWindow):
         action_stats.triggered.connect(self.abrir_stats)
         toolbar.addAction(action_stats)
 
+        # Acción: Ver Historial
+        action_hist = QAction("📜 Historial Ventas", self)
+        action_hist.triggered.connect(self.abrir_historial)
+        toolbar.addAction(action_hist)
+
         # --- Stack Central (Catálogo) ---
         self.stack = QStackedWidget()
         self.catalogo_view = CatalogoView(data_context,cart_service) # Le pasamos data

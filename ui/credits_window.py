@@ -1,20 +1,22 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTableView, 
-    QPushButton, QLabel, QHeaderView, QMessageBox, QDialog, QListWidget, QListWidgetItem
+    QPushButton, QLabel, QHeaderView, QMessageBox, QDialog, QListWidget, QListWidgetItem, QGroupBox, QFormLayout
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QFont
 from PySide6.QtCore import Qt, QDate
 
-from logic.credits_service import obtener_creditos_activos, obtener_detalle_credito, pagar_cuota
+from logic.credits_service import obtener_creditos_activos, obtener_detalle_credito, pagar_cuota, anular_pago
 from logic.financiero import format_currency
 from datetime import datetime
+
 
 class CreditDetailDialog(QDialog):
     def __init__(self, credito_id, parent=None):
         super().__init__(parent)
         self.credito_id = credito_id
-        self.setWindowTitle("Detalle de Crédito y Cuotas")
-        self.resize(500, 600)
+        self.setWindowTitle(f"Detalle de Crédito #{credito_id}")
+        self.resize(500, 700)
+        self._procesando = False # Blindaje para evitar doble ejecución
         
         layout = QVBoxLayout(self)
         
@@ -22,16 +24,55 @@ class CreditDetailDialog(QDialog):
         data = obtener_detalle_credito(credito_id)
         credito = data['credito']
         cuotas = data['cuotas']
+        items = data['items']
         
-        # Info Cabecera
-        info_str = (f"<b>Cliente ID:</b> {credito['cliente_id']}<br>"
-                    f"<b>Monto Financiado:</b> {format_currency(credito['monto_financiado'])}<br>"
-                    f"<b>Plan:</b> {credito['cantidad_cuotas']} Cuotas")
-        lbl_info = QLabel(info_str)
-        lbl_info.setTextFormat(Qt.RichText)
-        layout.addWidget(lbl_info)
+        # --- SECCIÓN 1: DATOS DEL CLIENTE ---
+        layout.addWidget(QLabel("<b>👤 DATOS DEL CLIENTE</b>"))
         
-        layout.addWidget(QLabel("<b>Cuotas (Doble click para cobrar):</b>"))
+        info_cliente = (
+            f"<b>Nombre:</b> {credito['nombre']}<br>"
+            f"<b>DNI:</b> {credito['dni']}<br>"
+            f"<b>Teléfono:</b> {credito.get('telefono', 'No registrado')}<br>"
+            f"<b>Dirección:</b> {credito.get('direccion', '-')}"
+        )
+        lbl_cliente = QLabel(info_cliente)
+        lbl_cliente.setTextFormat(Qt.RichText)
+        layout.addWidget(lbl_cliente)
+        
+        layout.addWidget(QLabel("<hr>"))
+        
+        # --- SECCIÓN 2: PRODUCTOS FINANCIADOS ---
+        layout.addWidget(QLabel("<b>📦 PRODUCTOS COMPRADOS</b>"))
+        
+        txt_productos = ""
+        for item in items:
+            modelo = item.get('MODELO', item.get('modelo', 'Producto'))
+            cant = item.get('cantidad', 1)
+            
+            # --- CORRECCIÓN DE PRECIO ---
+            # Priorizamos 'precio_unitario' (nombre en DB Facturas)
+            # Fallback a 'precio_venta_final' (nombre en Carrito)
+            precio = float(item.get('precio_unitario', item.get('precio_venta_final', 0)))
+            
+            txt_productos += f"• {cant} x {modelo} ({format_currency(precio)})\n"
+            
+        lbl_productos = QLabel(txt_productos)
+        lbl_productos.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 4px;")
+        layout.addWidget(lbl_productos)
+        
+        layout.addWidget(QLabel("<hr>"))
+        
+        # --- SECCIÓN 3: RESUMEN FINANCIERO ---
+        layout.addWidget(QLabel("<b>💰 PLAN DE PAGOS</b>"))
+        info_financiera = (
+            f"<b>Monto Total Financiado:</b> {format_currency(credito['monto_financiado'])}<br>"
+            f"<b>Plan:</b> {credito['cantidad_cuotas']} Cuotas"
+        )
+        lbl_fin = QLabel(info_financiera)
+        lbl_fin.setTextFormat(Qt.RichText)
+        layout.addWidget(lbl_fin)
+        
+        layout.addWidget(QLabel("<b>Estado de Cuotas (Doble click para cobrar/anular):</b>"))
 
         # Lista de Cuotas
         self.list_widget = QListWidget()
@@ -41,13 +82,11 @@ class CreditDetailDialog(QDialog):
             item_text = f"Cuota {c['numero_cuota']} - Vence: {c['fecha_vencimiento']} - {format_currency(c['monto'])}"
             item = QListWidgetItem(item_text)
             
-            # Lógica Visual de Estado
+            # Lógica Visual
             if c['estado'] == 'PAGADO':
                 item.setText(f"✅ {item_text} (Pagado: {c.get('fecha_pago', '-')})")
                 item.setForeground(QColor("green"))
-                item.setFlags(item.flags() & ~Qt.ItemIsEnabled) # Deshabilitar si ya pagó
             else:
-                # Pendiente
                 if c['fecha_vencimiento'] < self.hoy:
                     item.setText(f"⚠️ {item_text} [VENCIDA]")
                     item.setForeground(QColor("red"))
@@ -56,7 +95,6 @@ class CreditDetailDialog(QDialog):
                     item.setText(f"⏳ {item_text}")
                     item.setForeground(QColor("black"))
             
-            # Guardamos ID en el item para usarlo al clickear
             item.setData(Qt.UserRole, c['id']) 
             self.list_widget.addItem(item)
             
@@ -68,57 +106,61 @@ class CreditDetailDialog(QDialog):
         layout.addWidget(btn_cerrar)
 
     def pagar_cuota_seleccionada(self, item):
-        cuota_id = item.data(Qt.UserRole)
+
+        # Blindaje: Si ya estamos mostrando un diálogo, ignorar clicks extra
+        if self._procesando: return
+        self._procesando = True
         
-        # Obtenemos el estado actual leyendo el texto del item (truco visual rápido)
-        # O idealmente consultando la DB, pero el texto es confiable aquí.
-        texto_item = item.text()
-        es_pago = "✅" in texto_item
-        
-        from logic.credits_service import pagar_cuota, anular_pago # Import local
-        
-        if es_pago:
-            # --- LÓGICA DE REVERSIÓN (SEGURIDAD EXTRA) ---
-            advertencia = QMessageBox.warning(
-                self, "Seguridad - Anular Pago",
-                "⚠️ ESTÁ A PUNTO DE ANULAR UN PAGO YA REGISTRADO.\n\n"
-                "¿Está seguro que desea volver esta cuota a estado PENDIENTE?\n"
-                "Esto afectará el estado de cuenta del cliente.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No # Por defecto NO para evitar accidentes
-            )
+        try:
+            cuota_id = item.data(Qt.UserRole)
+            texto_item = item.text()
+            es_pago = "✅" in texto_item
             
-            if advertencia == QMessageBox.Yes:
-                anular_pago(cuota_id)
-                # Actualizamos visualmente el item a estado pendiente
-                # (Lo limpiamos quitando el check y restaurando color)
-                texto_limpio = texto_item.replace("✅ ", "").split(" (Pagado")[0]
-                item.setText(f"⏳ {texto_limpio}") # Icono reloj
-                item.setForeground(QColor("black"))
-                item.setFlags(item.flags() | Qt.ItemIsEnabled) # Reactivar
-                QMessageBox.information(self, "Anulado", "El pago ha sido revertido exitosamente.")
-        
-        else:
-            # --- LÓGICA DE COBRO NORMAL ---
-            confirm = QMessageBox.question(
-                self, "Confirmar Cobro", 
-                "¿Confirmar recepción del dinero y marcar cuota como PAGADA?", 
-                QMessageBox.Yes | QMessageBox.No
-            )
-            
-            if confirm == QMessageBox.Yes:
-                pagar_cuota(cuota_id)
+            if es_pago:
+                # --- FLUJO DE ANULACIÓN ---
+                advertencia = QMessageBox.warning(
+                    self, "Anular Pago",
+                    "⚠️ ¿Desea ANULAR este pago y volver la cuota a estado PENDIENTE?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
                 
-                # Actualizar visualmente a Pagado
-                # Quitamos iconos viejos de espera o alerta
-                texto_limpio = texto_item.replace("⏳ ", "").replace("⚠️ ", "").replace(" [VENCIDA]", "")
-                hoy = datetime.now().strftime("%Y-%m-%d")
-                item.setText(f"✅ {texto_limpio} (Pagado: {hoy})")
-                item.setForeground(QColor("green"))
-                # Opcional: No deshabilitar si queremos permitir anular inmediatamente
-                # item.setFlags(item.flags() & ~Qt.ItemIsEnabled) 
+                if advertencia == QMessageBox.Yes:
+                    anular_pago(cuota_id)
+                    
+                    # Actualizar visualmente
+                    texto_limpio = texto_item.replace("✅ ", "").split(" (Pagado")[0]
+                    item.setText(f"⏳ {texto_limpio}")
+                    item.setForeground(QColor("black"))
+                    
+                    QMessageBox.information(self, "Anulado", "El pago ha sido revertido correctamente.")
                 
-                QMessageBox.information(self, "Éxito", "Pago registrado.")
+                # Si dice NO, simplemente sale (gracias al return implícito al final)
+
+            else:
+                # --- FLUJO DE COBRO ---
+                confirm = QMessageBox.question(
+                    self, "Confirmar Cobro", 
+                    "¿Confirmar recepción del dinero y marcar cuota como PAGADA?", 
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                
+                if confirm == QMessageBox.Yes:
+                    pagar_cuota(cuota_id)
+                    
+                    # Actualizar visualmente
+                    texto_limpio = texto_item.replace("⏳ ", "").replace("⚠️ ", "").replace(" [VENCIDA]", "")
+                    hoy = datetime.now().strftime("%Y-%m-%d")
+                    item.setText(f"✅ {texto_limpio} (Pagado: {hoy})")
+                    item.setForeground(QColor("green"))
+                    
+                    QMessageBox.information(self, "Éxito", "Pago registrado correctamente.")
+                
+                # Si dice NO, no hace nada
+
+        finally:
+            # Liberamos el bloqueo siempre, pase lo que pase
+            self._procesando = False
 
 class CreditsWindow(QMainWindow):
     def __init__(self, parent=None):
