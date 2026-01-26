@@ -28,9 +28,10 @@ def _sanitizar_nombre(nombre: str) -> str:
 
 def generar_documentacion_credito(cliente: dict, items: list, plan: dict) -> str:
     """
-    Genera un único PDF con dos páginas:
-    Pag 1: Contrato de Compraventa.
-    Pag 2: Desglose de Cuotas.
+    Genera un único PDF con tres páginas:
+    Pag 1: Contrato de Compraventa (Copia 1).
+    Pag 2: Contrato de Compraventa (Copia 2 - Igual a la anterior).
+    Pag 3: Desglose de Cuotas.
     """
     ensure_dirs()
     
@@ -43,13 +44,20 @@ def generar_documentacion_credito(cliente: dict, items: list, plan: dict) -> str
     styles = getSampleStyleSheet()
     story = []
 
-    # --- PÁGINA 1: CONTRATO ---
+    # --- PÁGINA 1: CONTRATO (Original) ---
     _agregar_contenido_contrato(story, styles, cliente, items, plan)
     
-    # --- SALTO DE PÁGINA ---
+    # Salto de página
+    story.append(PageBreak())
+
+    # --- PÁGINA 2: CONTRATO (Duplicado) ---
+    # Volvemos a llamar a la misma función con los mismos datos
+    _agregar_contenido_contrato(story, styles, cliente, items, plan)
+    
+    # Salto de página
     story.append(PageBreak())
     
-    # --- PÁGINA 2: DESGLOSE ---
+    # --- PÁGINA 3: DESGLOSE ---
     _agregar_contenido_desglose(story, styles, cliente, plan)
     
     doc.build(story)
@@ -135,14 +143,17 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
 
     texto_garantia = """
     <b>CUARTA: Garantía – Pagaré</b><br/>
-    En garantía del cumplimiento del saldo de precio pactado, el COMPRADOR suscribe en este acto un pagaré sin protesto, por la suma total pendiente de pago, conforme a lo previsto en la Ley N° 5.965/63.
+    En garantía del cumplimiento del saldo de precio pactado, el COMPRADOR suscribe en este acto un pagaré sin protesto, por la suma total pendiente de pago, conforme a lo previsto en la Ley N° 5.965/63 (Ley de Letras de Cambio y Pagaré). 
+    Renunciando expresamente al protesto, a cualquier beneficio de excusión y división, y sometiéndose a la competencia de los tribunales ordinarios de Oberá, Provincia de Misiones.
     """
     story.append(Paragraph(texto_garantia, style_body))
     story.append(Spacer(1, 12))
 
     texto_jurisdiccion = """
     <b>QUINTA: Jurisdicción</b><br/>
-    Para cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción de los tribunales ordinarios de Oberá, Provincia de Misiones.
+    Para cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción de los tribunales ordinarios de Oberá, Provincia de Misiones. Con renuncia expresa a cualquier otro fuero o jurisdicción.<br/>
+
+    En prueba de conformidad, se firman dos (2) ejemplares de un mismo tenor y a un solo efecto, en el lugar y fecha indicados.
     """
     story.append(Paragraph(texto_jurisdiccion, style_body))
     story.append(Spacer(1, 30))
