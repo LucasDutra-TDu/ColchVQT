@@ -1,7 +1,8 @@
 # ui/main_window.py
 from typing import Dict, Any
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QToolBar, QStatusBar, QPushButton, QWidget, QHBoxLayout
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QToolBar, QStatusBar, QPushButton, QWidget, QHBoxLayout, QInputDialog, QLineEdit, QMessageBox
 from PySide6.QtGui import QAction, QIcon
+
 
 from ui.catalogo_view import CatalogoView
 from ui.cart_window import CartWindow
@@ -107,5 +108,32 @@ class MainWindow(QMainWindow):
         self.w_creditos.show()
 
     def abrir_stats(self):
-        self.w_stats = StatsWindow(self)
-        self.w_stats.show()
+        """
+        Solicita contraseña de gerente antes de mostrar la información sensible.
+        """
+        # --- BLOQUE DE SEGURIDAD ---
+        password, ok = QInputDialog.getText(
+            self, 
+            "Acceso Restringido", 
+            "🔒 Área Gerencial\nIngrese la contraseña:", 
+            QLineEdit.Password
+        )
+        
+        if not ok: return
+        
+        # --- DEFINIR CONTRASEÑA AQUÍ ---
+        CLAVE_GERENTE = "Galpon950"
+        
+        if password != CLAVE_GERENTE:
+            QMessageBox.warning(self, "Acceso Denegado", "La contraseña ingresada es incorrecta.")
+            return
+        # ---------------------------
+
+        # Si la contraseña es correcta, procedemos a abrir la ventana normalmente
+        from ui.stats_window import StatsWindow # Import local para evitar ciclos si es necesario
+        
+        if not hasattr(self, 'stats_window') or self.stats_window is None:
+            self.stats_window = StatsWindow(self)
+        
+        self.stats_window.show()
+        self.stats_window.activateWindow() # Traer al frente

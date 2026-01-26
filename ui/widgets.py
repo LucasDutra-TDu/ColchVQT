@@ -38,3 +38,59 @@ class MonthYearSelector(QWidget):
     def get_date(self):
         """Devuelve (mes, anio) como enteros."""
         return self.combo_mes.currentIndex() + 1, self.spin_anio.value()
+    
+class SuccessDialog(QDialog):
+    def __init__(self, titulo, mensaje, ruta_archivo=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(titulo)
+        self.resize(450, 200)
+        self.ruta_archivo = ruta_archivo
+        
+        layout = QVBoxLayout(self)
+        
+        # Icono y Mensaje
+        lbl_msg = QLabel(mensaje)
+        lbl_msg.setWordWrap(True)
+        lbl_msg.setStyleSheet("font-size: 14px;")
+        layout.addWidget(lbl_msg)
+        
+        if ruta_archivo:
+            # Caja con la ruta para que se vea bien
+            lbl_path = QLabel(ruta_archivo)
+            lbl_path.setStyleSheet("background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; font-family: Consolas;")
+            lbl_path.setWordWrap(True)
+            lbl_path.setTextInteractionFlags(Qt.TextSelectableByMouse) # Permitir seleccionar texto
+            layout.addWidget(lbl_path)
+
+        # Botones
+        btn_layout = QHBoxLayout()
+        
+        if ruta_archivo:
+            btn_copy = QPushButton("📋 Copiar Ruta")
+            btn_copy.clicked.connect(self.copiar_ruta)
+            btn_layout.addWidget(btn_copy)
+            
+            btn_open = QPushButton("📂 Abrir Carpeta")
+            btn_open.clicked.connect(self.abrir_carpeta)
+            btn_layout.addWidget(btn_open)
+
+        btn_close = QPushButton("Cerrar")
+        btn_close.clicked.connect(self.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_close)
+        
+        layout.addLayout(btn_layout)
+
+    def copiar_ruta(self):
+        if self.ruta_archivo:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(self.ruta_archivo)
+            QMessageBox.information(self, "Copiado", "Ruta copiada al portapapeles.")
+
+    def abrir_carpeta(self):
+        if self.ruta_archivo:
+            try:
+                folder = os.path.dirname(self.ruta_archivo)
+                os.startfile(folder)
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"No se pudo abrir la carpeta: {e}")

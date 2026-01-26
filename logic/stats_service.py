@@ -17,7 +17,7 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
         }
     }
     
-    # 1. OBTENER LISTA NEGRA DE IDs (Facturas que son Créditos para no duplicar)
+    # 1. OBTENER LISTA NEGRA DE IDs (Facturas que son Créditos)
     ids_excluir = []
     with get_conn_credits() as con:
         rows = con.execute("SELECT factura_id FROM creditos").fetchall()
@@ -25,7 +25,6 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
 
     # A) Ventas DIRECTAS (Efectivo/Tarjeta)
     with get_conn_invoices() as con:
-        # Exclusión nuclear por ID
         if ids_excluir:
             placeholders = ','.join(['?'] * len(ids_excluir))
             sql_condicion_excluir = f"AND id NOT IN ({placeholders})"
@@ -50,20 +49,31 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             total_venta = f_dict['total']
             
-            # Reconstrucción de Base
+            # --- CÁLCULO DE BASES Y COSTOS ---
             base_efectivo_total = 0.0
+            costo_total_venta = 0.0 # Nuevo acumulador
+            
             for item in items:
                 cant = int(item.get('cantidad', 1))
+                
+                # 1. Base
                 p_base = item.get('precio_lista_base')
                 if p_base is None or float(p_base) == 0:
                     p_base = item.get('EFECTIVO/TRANSF')
                 if p_base is None or float(p_base) == 0:
                     p_base = item.get('precio_unitario', 0)
                 
+                # 2. Costo (Nuevo)
+                p_costo = float(item.get('costo_historico', item.get('COSTO', 0)))
+                
                 base_efectivo_total += float(p_base) * cant
+                costo_total_venta += p_costo * cant
             
-            # Cálculo Comisiones
+            # --- CÁLCULO DE COMISIONES Y GANANCIA NETA ---
             comis = calcular_comisiones(f_dict['metodo_pago'], base_efectivo_total, total_venta)
+            
+            # REFINAMIENTO: Restamos el costo a la ganancia de la empresa
+            comis["empresa"] = comis["empresa"] - costo_total_venta
             
             _sumar_totales(reporte, comis, total_venta)
             
@@ -72,7 +82,6 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
                 "tipo": f"VENTA {f_dict['metodo_pago']}",
                 "detalle": f"Factura #{f_dict['id']}",
                 
-                # Desglose para la tabla
                 "ganancia_empresa": comis["empresa"],
                 "comis_gerente": comis["gerente"],
                 "comis_vendedor": comis["vendedor"],
@@ -84,11 +93,16 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
 
     # B) Cuotas de CRÉDITOS
     with get_conn_credits() as con:
+        # Actualizamos la consulta para traer también los items de la factura original (para sacar el costo)
+        # y la cantidad total de cuotas (para prorratear el costo)
         sql_cuotas = """
-            SELECT c.*, cr.monto_financiado, cr.monto_base, cl.nombre, cr.id as credito_real_id
+            SELECT c.*, cr.monto_financiado, cr.monto_base, cr.cantidad_cuotas,
+                   cl.nombre, cr.id as credito_real_id,
+                   f.items_json 
             FROM cuotas c
             JOIN creditos cr ON c.credito_id = cr.id
             JOIN clientes cl ON cr.cliente_id = cl.id
+            JOIN facturas f ON cr.factura_id = f.id
             WHERE strftime('%Y-%m', c.fecha_vencimiento) = ?
         """
         cuotas = con.execute(sql_cuotas, (mes_str,)).fetchall()
@@ -100,18 +114,39 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             if total_base == 0: total_base = total_financiado
             
+            # 1. Prorrateo Financiero (Para comisiones)
             ratio_base = total_base / total_financiado
             parte_capital = monto_cuota * ratio_base
             parte_interes = monto_cuota - parte_capital
             
-            # Cálculo Específico Créditos
+            # 2. Prorrateo de Costos (Para ganancia empresa)
+            # Calculamos el costo total original del crédito
+            try:
+                items_origen = json.loads(c['items_json'])
+            except:
+                items_origen = []
+            
+            costo_total_credito = 0.0
+            for item in items_origen:
+                p_costo = float(item.get('costo_historico', item.get('COSTO', 0)))
+                cant = int(item.get('cantidad', 1))
+                costo_total_credito += p_costo * cant
+            
+            # Dividimos el costo total por la cantidad de cuotas
+            # Así, cada cuota paga su "pedacito" de costo
+            cant_cuotas_total = c['cantidad_cuotas'] if c['cantidad_cuotas'] > 0 else 1
+            costo_prorrateado_cuota = costo_total_credito / cant_cuotas_total
+
+            # 3. Comisiones
             comis_gerente = (parte_capital * 0.04) + (parte_interes * 0.10)
             comis_vendedor = (parte_capital * 0.03) + (parte_interes * 0.08)
-            comis_empresa = monto_cuota - (comis_gerente + comis_vendedor)
+            comis_empresa_bruta = monto_cuota - (comis_gerente + comis_vendedor)
             
-            # --- CORRECCIÓN AQUÍ: Usamos 'comis' para unificar nombre ---
+            # 4. Refinamiento: Restamos el costo prorrateado
+            comis_empresa_neta = comis_empresa_bruta - costo_prorrateado_cuota
+            
             comis = {
-                "empresa": comis_empresa,
+                "empresa": comis_empresa_neta,
                 "gerente": comis_gerente,
                 "vendedor": comis_vendedor
             }
@@ -123,7 +158,6 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
                 "tipo": "CUOTA CRÉDITO",
                 "detalle": f"Cuota {c['numero_cuota']} - {c['nombre']}",
                 
-                # Desglose para la tabla (Ahora sí funciona porque 'comis' existe)
                 "ganancia_empresa": comis["empresa"],
                 "comis_gerente": comis["gerente"],
                 "comis_vendedor": comis["vendedor"],

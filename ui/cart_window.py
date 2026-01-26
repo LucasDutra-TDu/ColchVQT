@@ -283,7 +283,6 @@ class CartWindow(QWidget):
             total_calc = 0
             
             if metodo == "Crédito de la Casa" and self.plan_credito_actual:
-                 # ... (Lógica de resumen crédito igual que antes) ...
                  plan = self.plan_credito_actual
                  for item in items_checkout:
                      detalle_msg += f"• {item['cantidad']} x {item['MODELO']}<br>"
@@ -292,7 +291,6 @@ class CartWindow(QWidget):
                  total_venta = plan['precio_final']
             
             else:
-                # ... (Lógica de resumen contado igual que antes) ...
                 for item in items_checkout:
                     p_unit = item['precio_venta_final']
                     subtot = p_unit * item['cantidad']

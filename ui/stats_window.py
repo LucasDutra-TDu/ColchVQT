@@ -13,6 +13,7 @@ from ui.history_window import DetalleFacturaDialog
 from ui.credits_window import CreditDetailDialog   
 from logic.facturas_db_handler import obtener_historial, buscar_por_fecha
 from logic.credits_service import obtener_id_credito_por_factura
+from logic.pdf_service import generar_comprobante_venta
 
 class StatsWindow(QMainWindow):
     def __init__(self, parent=None):

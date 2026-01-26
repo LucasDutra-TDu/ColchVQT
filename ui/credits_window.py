@@ -9,6 +9,9 @@ from logic.credits_service import obtener_creditos_activos, obtener_detalle_cred
 from logic.financiero import format_currency
 from datetime import datetime
 
+from logic.pdf_service import generar_detalle_credito_pdf
+from ui.widgets import SuccessDialog
+
 
 class CreditDetailDialog(QDialog):
     def __init__(self, credito_id, parent=None):
@@ -22,18 +25,18 @@ class CreditDetailDialog(QDialog):
         
         # Cargar datos
         data = obtener_detalle_credito(credito_id)
-        credito = data['credito']
-        cuotas = data['cuotas']
-        items = data['items']
+        self.credito = data['credito']
+        self.cuotas = data['cuotas']
+        self.items = data['items']
         
         # --- SECCIÓN 1: DATOS DEL CLIENTE ---
         layout.addWidget(QLabel("<b>👤 DATOS DEL CLIENTE</b>"))
         
         info_cliente = (
-            f"<b>Nombre:</b> {credito['nombre']}<br>"
-            f"<b>DNI:</b> {credito['dni']}<br>"
-            f"<b>Teléfono:</b> {credito.get('telefono', 'No registrado')}<br>"
-            f"<b>Dirección:</b> {credito.get('direccion', '-')}"
+            f"<b>Nombre:</b> {self.credito['nombre']}<br>"
+            f"<b>DNI:</b> {self.credito['dni']}<br>"
+            f"<b>Teléfono:</b> {self.credito.get('telefono', 'No registrado')}<br>"
+            f"<b>Dirección:</b> {self.credito.get('direccion', '-')}"
         )
         lbl_cliente = QLabel(info_cliente)
         lbl_cliente.setTextFormat(Qt.RichText)
@@ -45,7 +48,7 @@ class CreditDetailDialog(QDialog):
         layout.addWidget(QLabel("<b>📦 PRODUCTOS COMPRADOS</b>"))
         
         txt_productos = ""
-        for item in items:
+        for item in self.items:
             modelo = item.get('MODELO', item.get('modelo', 'Producto'))
             cant = item.get('cantidad', 1)
             
@@ -65,8 +68,8 @@ class CreditDetailDialog(QDialog):
         # --- SECCIÓN 3: RESUMEN FINANCIERO ---
         layout.addWidget(QLabel("<b>💰 PLAN DE PAGOS</b>"))
         info_financiera = (
-            f"<b>Monto Total Financiado:</b> {format_currency(credito['monto_financiado'])}<br>"
-            f"<b>Plan:</b> {credito['cantidad_cuotas']} Cuotas"
+            f"<b>Monto Total Financiado:</b> {format_currency(self.credito['monto_financiado'])}<br>"
+            f"<b>Plan:</b> {self.credito['cantidad_cuotas']} Cuotas"
         )
         lbl_fin = QLabel(info_financiera)
         lbl_fin.setTextFormat(Qt.RichText)
@@ -78,7 +81,7 @@ class CreditDetailDialog(QDialog):
         self.list_widget = QListWidget()
         self.hoy = datetime.now().strftime("%Y-%m-%d")
         
-        for c in cuotas:
+        for c in self.cuotas:
             item_text = f"Cuota {c['numero_cuota']} - Vence: {c['fecha_vencimiento']} - {format_currency(c['monto'])}"
             item = QListWidgetItem(item_text)
             
@@ -101,9 +104,43 @@ class CreditDetailDialog(QDialog):
         self.list_widget.itemDoubleClicked.connect(self.pagar_cuota_seleccionada)
         layout.addWidget(self.list_widget)
         
+        botones_layout = QHBoxLayout()
+        
+        btn_imprimir = QPushButton("🖨️ Imprimir Detalle")
+        btn_imprimir.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
+        btn_imprimir.clicked.connect(self.imprimir_detalle)
+        botones_layout.addWidget(btn_imprimir)
+        
+        botones_layout.addStretch()
+        
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.clicked.connect(self.accept)
-        layout.addWidget(btn_cerrar)
+        botones_layout.addWidget(btn_cerrar)
+        
+        layout.addLayout(botones_layout)
+
+    def imprimir_detalle(self):
+            try:
+                # Consultamos la BD nuevamente para obtener los cambios recientes (pagos realizados)
+                # sin necesidad de cerrar y abrir la ventana.
+                data_actualizada = obtener_detalle_credito(self.credito_id)
+                cuotas_actualizadas = data_actualizada['cuotas']
+                
+                # Generamos el PDF con los datos frescos
+                path = generar_detalle_credito_pdf(self.credito, cuotas_actualizadas)
+                
+                dlg = SuccessDialog(
+                    "Documento Generado",
+                    "Se ha generado el estado de cuenta del crédito.",
+                    ruta_archivo=path,
+                    parent=self
+                )
+                dlg.exec()
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"No se pudo generar el PDF:\n{e}")
 
     def pagar_cuota_seleccionada(self, item):
 

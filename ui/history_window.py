@@ -9,11 +9,13 @@ from PySide6.QtCore import Qt
 # Lógica
 from logic.facturas_db_handler import obtener_historial, buscar_por_fecha
 from logic.financiero import format_currency
-from logic.credits_service import obtener_id_credito_por_factura # <--- NUEVO
+from logic.credits_service import obtener_id_credito_por_factura
 from ui.widgets import MonthYearSelector
 
 # Diálogos
-from ui.credits_window import CreditDetailDialog # <--- NUEVO
+from ui.credits_window import CreditDetailDialog
+from ui.widgets import  SuccessDialog
+from logic.pdf_service import generar_comprobante_venta
 
 class DetalleFacturaDialog(QDialog):
     # ... (El código de DetalleFacturaDialog que te pasé antes se mantiene IGUAL) ...
@@ -21,6 +23,7 @@ class DetalleFacturaDialog(QDialog):
     # Asegúrate de incluir la clase DetalleFacturaDialog aquí o importarla si la moviste.
     def __init__(self, factura, parent=None):
         super().__init__(parent)
+        self.factura = factura
         self.setWindowTitle(f"Detalle Factura #{factura['id']}")
         self.resize(450, 550)
         layout = QVBoxLayout(self)
@@ -80,6 +83,41 @@ class DetalleFacturaDialog(QDialog):
         botones = QDialogButtonBox(QDialogButtonBox.Ok)
         botones.accepted.connect(self.accept)
         layout.addWidget(botones)
+        
+        botones_layout = QHBoxLayout()
+        
+        # Botón Imprimir
+        btn_print = QPushButton("🖨️ Imprimir Comprobante")
+        btn_print.setStyleSheet("background-color: #3498db; color: white; font-weight: bold; padding: 8px;")
+        btn_print.clicked.connect(self.imprimir_comprobante)
+        botones_layout.addWidget(btn_print)
+        
+        botones_layout.addStretch()
+        
+        # Botón Cerrar (Standard)
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.clicked.connect(self.accept)
+        botones_layout.addWidget(btn_cerrar)
+        
+        layout.addLayout(botones_layout)
+
+    def imprimir_comprobante(self):
+        try:
+            path = generar_comprobante_venta(self.factura)
+            
+            # Usamos tu nuevo diálogo de éxito que tiene botones de abrir/copiar
+            dlg = SuccessDialog(
+                "Comprobante Generado",
+                f"Se ha creado el PDF del comprobante #{self.factura['id']}",
+                ruta_archivo=path,
+                parent=self
+            )
+            dlg.exec()
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Error", f"No se pudo generar el PDF:\n{e}")
 
 class HistoryWindow(QMainWindow):
     def __init__(self, parent=None):
