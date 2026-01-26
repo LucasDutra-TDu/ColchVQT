@@ -11,7 +11,33 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_RIGHT
 # Imports de formateo
 from logic.financiero import format_currency
 
-OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output_docs"
+import sys
+import os
+from pathlib import Path
+
+# --- INICIO DE LA BRÚJULA UNIVERSAL ---
+def get_base_path():
+    """
+    Devuelve la ruta raíz del proyecto, detectando si estamos
+    en modo desarrollo (Python) o en modo producción (.exe).
+    """
+    if getattr(sys, 'frozen', False):
+        # CASO 1: Estamos corriendo como EJECUTABLE (.exe)
+        # En este caso, queremos la carpeta donde está el .exe
+        return Path(sys.executable).parent
+    else:
+        # CASO 2: Estamos corriendo en DESARROLLO (.py)
+        # Path(__file__) es este archivo (invoice_service.py)
+        # .parent es la carpeta 'logic'
+        # .parent.parent es la carpeta raíz del proyecto 'ColchVQT'
+        return Path(__file__).resolve().parent.parent
+
+# --- USANDO LA BRÚJULA ---
+BASE_DIR = get_base_path()
+
+
+DB_PATH = BASE_DIR / "data" / "ventas.db"
+OUTPUT_DIR = BASE_DIR / "output_docs"
 
 def ensure_dirs():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
