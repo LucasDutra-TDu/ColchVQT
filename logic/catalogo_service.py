@@ -64,8 +64,58 @@ def buscar_producto_por_modelo(sheets: Dict[str, pd.DataFrame], termino: str) ->
     mask = df_completo['MODELO'].astype(str).str.contains(termino, case=False, na=False)
     return df_completo[mask]
 
-# --- NOTA DE MIGRACIÓN ---
-# Las funciones de copiado (copiar_info_colchones, etc.) han sido ELIMINADAS.
-# La lógica de formateo de texto ahora vive en 'logic/financiero.py' o
-# se maneja directamente en la UI.
-# La acción de copiar al portapapeles ahora es exclusiva
+def formatear_producto_para_clipboard(row: dict) -> str:
+    """
+    Genera un texto ordenado del producto para pegar en WhatsApp/Redes.
+    Detecta automáticamente si es Colchón o Mueble/Otro.
+    """
+    partes = []
+    
+    # 1. Detección de Tipo
+    es_colchon = "MEDIDA (LARG-ANCH-ESP)" in row or "SOPORTA (PORPLAZA)" in row
+
+    if es_colchon:
+        # --- FORMATO COLCHONES (Sin cambios) ---
+        marca = row.get('PROVEEDOR', '-')
+        modelo = row.get('MODELO', '-')
+        medida = row.get('MEDIDA (LARG-ANCH-ESP)', '-')
+        
+        partes.append(f"🛏️ *{marca} - {modelo}*")
+        partes.append(f"📏 Medida: {medida}")
+        
+        if row.get('MATERIAL') and str(row.get('MATERIAL')) != '-': 
+            partes.append(f"🧶 Material: {row.get('MATERIAL')}")
+        
+        if row.get('SOPORTA (PorPlaza)') and str(row.get('SOPORTA (PORPLAZA)')) != '-':
+            partes.append(f"🏋️ Soporta: {row.get('SOPORTA (PORPLAZA)')}")
+
+    else:
+        # --- FORMATO MUEBLES / OTROS (CORREGIDO) ---
+        # El usuario pidió: Primero Modelo, luego Características.
+        
+        modelo = row.get('MODELO', '')
+        caracteristicas = row.get('CARACTERISTICAS', row.get('DESCRIPCION', ''))
+        
+        # 1. Modelo
+        if modelo and str(modelo) not in ['-', '', 'None']:
+            partes.append(f"🏷️ Modelo: {modelo}")
+            
+        # 2. Características (Con el subtítulo solicitado)
+        if caracteristicas and str(caracteristicas) not in ['-', '', 'None']:
+            partes.append(f"📦 Caracteristicas: {caracteristicas}")
+
+    partes.append("") # Espacio separador
+
+    # 2. Precios y Financiación
+    cols_precios = [
+        ('EFECTIVO/TRANSF', '💵 Efectivo/Transf'),
+        ('DEBIT/CREDIT', '💳 Lista/Tarjeta')
+    ]
+
+    for key_col, etiqueta in cols_precios:
+        val = row.get(key_col)
+        # Filtramos valores vacíos, nulos o guiones
+        if val and str(val).strip() not in ['', '-', 'None', '$0', '$ 0']:
+            partes.append(f"{etiqueta}: {val}")
+
+    return "\n".join(partes)

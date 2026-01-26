@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 # Imports Propios
 from logic.constants import ESTILOS, CAMPOS_CATALOGO, CATALOGO_ANCHOS, MAPEO_CLIPBOARD
 from logic import catalogo_service
+from logic.catalogo_service import formatear_producto_para_clipboard
 # Importamos la nueva lógica financiera
 from logic.financiero import calcular_plan_cuotas, format_currency, generar_texto_clipboard
 from logic.cart_service import CartService
@@ -99,6 +100,24 @@ def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
             import traceback
             traceback.print_exc()
             QMessageBox.critical(parent, "Error de Cálculo", f"Error:\n{str(e)}")
+
+def copiar_callback(info_fila):
+    """
+    Recibe la fila (diccionario), genera el texto y lo manda al portapapeles.
+    """
+    try:
+        texto_final = formatear_producto_para_clipboard(info_fila)
+        
+        # Copiar al portapapeles
+        clipboard = QApplication.clipboard()
+        clipboard.setText(texto_final)
+        
+        # Feedback visual sutil (Opcional: un print o un toast sería mejor, 
+        # pero un cambio de cursor o mensaje en consola basta para no interrumpir)
+        print(f"Copiado al portapapeles:\n{texto_final}")
+        
+    except Exception as e:
+        print(f"Error al copiar: {e}")
 
 def build_tabla_productos(parent_window, df, campos, copiar_callback, cart_service: CartService):
     """Construye la tabla con botón de Carrito incluido."""
@@ -270,12 +289,22 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
     campos = [c for c in CAMPOS_CATALOGO.get(tipo_producto, []) if c != "COSTO"]
     campos_visibles = [c for c in campos if c in df.columns]
     
-    # Callback dinámico
-    func_copiar_nombre = f"copiar_info_{tipo_producto}"
-    copiar_callback = getattr(catalogo_service, func_copiar_nombre, None)
-    
-    if not copiar_callback:
-        copiar_callback = lambda x: print("Función de copiado no encontrada")
+    def copiar_universal_wrapper(fila_datos):
+        try:
+            # 1. Generamos el texto limpio
+            texto = formatear_producto_para_clipboard(fila_datos)
+            
+            # 2. Enviamos al portapapeles del sistema
+            clipboard = QApplication.clipboard()
+            clipboard.setText(texto)
+            
+            # (Opcional) Feedback en consola
+            print(f"✅ Texto copiado:\n{texto[:50]}...") 
+        except Exception as e:
+            print(f"❌ Error al copiar: {e}")
+
+    # Asignamos esta función universal como el callback
+    copiar_callback = copiar_universal_wrapper
 
     tabla = build_tabla_productos(parent_window, df, campos_visibles, copiar_callback, cart_service)
     layout.addWidget(tabla)

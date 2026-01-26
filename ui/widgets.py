@@ -1,5 +1,6 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QComboBox, QSpinBox, QLabel
-from PySide6.QtCore import QDate, Signal
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QComboBox, QSpinBox, QLabel, QDialog, QVBoxLayout, QPushButton, QApplication, QMessageBox
+from PySide6.QtCore import QDate, Signal, Qt
+import os
 
 class MonthYearSelector(QWidget):
     # Señal para avisar a la ventana padre que cambió la fecha
