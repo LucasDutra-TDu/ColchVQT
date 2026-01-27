@@ -18,9 +18,6 @@ from ui.widgets import  SuccessDialog
 from logic.pdf_service import generar_comprobante_venta
 
 class DetalleFacturaDialog(QDialog):
-    # ... (El código de DetalleFacturaDialog que te pasé antes se mantiene IGUAL) ...
-    # ... (Si no lo tienes a mano, avísame, pero asumo que ya está pegado de la respuesta anterior) ...
-    # Asegúrate de incluir la clase DetalleFacturaDialog aquí o importarla si la moviste.
     def __init__(self, factura, parent=None):
         super().__init__(parent)
         self.factura = factura
@@ -159,6 +156,22 @@ class HistoryWindow(QMainWindow):
         self.table.doubleClicked.connect(self.abrir_detalle)
         
         layout.addWidget(self.table)
+
+        # --- LABEL DE TOTALES ---
+        self.lbl_total_mes = QLabel("Total Movimiento: $ 0")
+        self.lbl_total_mes.setStyleSheet("""
+            font-size: 16px; 
+            font-weight: bold; 
+            color: #2c3e50; 
+            padding: 10px; 
+            background-color: #ecf0f1; 
+            border: 1px solid #bdc3c7; 
+            border-radius: 5px;
+        """)
+        self.lbl_total_mes.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        layout.addWidget(self.lbl_total_mes)
+        # -------------------------------------
+
         self.datos_actuales = [] # Para guardar referencia de objetos completos
         self.cargar_datos()
 
@@ -181,12 +194,29 @@ class HistoryWindow(QMainWindow):
     def cargar_datos(self):
         mes, anio = self.selector_fecha.get_date()
         fecha_filtro = f"{anio}-{mes:02d}"
+        
+        # 1. Obtener datos
         facturas = buscar_por_fecha(fecha_filtro)
+        self.datos_actuales = facturas # Guardamos referencia
+        
+        # 2. Llenar tabla
         self._llenar_tabla(facturas)
 
+        # 3. Calcular y mostrar Total del Mes
+        total_mes = sum(float(f.get('total', 0)) for f in facturas)
+        self.lbl_total_mes.setText(f"Total ({mes}/{anio}): {format_currency(total_mes)}")
+
     def cargar_todos(self):
+        # 1. Obtener datos
         facturas = obtener_historial()
+        self.datos_actuales = facturas # Guardamos referencia
+        
+        # 2. Llenar tabla
         self._llenar_tabla(facturas)
+
+        # 3. Calcular y mostrar Total Histórico
+        total_hist = sum(float(f.get('total', 0)) for f in facturas)
+        self.lbl_total_mes.setText(f"Total Histórico: {format_currency(total_hist)}")
 
     def abrir_detalle(self, index):
         row = index.row()

@@ -18,6 +18,7 @@ from logic.catalogo_service import formatear_producto_para_clipboard
 from logic.financiero import calcular_plan_cuotas, format_currency, generar_texto_clipboard
 from logic.cart_service import CartService
 
+
 def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
     """Manejador del evento de cálculo de cuotas (Controller Logic)."""
     
@@ -374,9 +375,24 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
         seen = set()
         master_list = [x for x in all_cols if not (x in seen or seen.add(x))]
         
+        def copiar_desde_busqueda(fila_datos):
+            try:
+                texto = formatear_producto_para_clipboard(fila_datos)
+                QApplication.clipboard().setText(texto)
+                print(f"✅ (Búsqueda) Texto copiado al portapapeles")
+            except Exception as e:
+                print(f"❌ Error al copiar: {e}")
+
         campos_visibles = [c for c in master_list if c in df.columns]
 
-        tabla = build_tabla_productos(parent_window, df, campos_visibles, catalogo_service.copiar_info_busqueda, cart_service)
+        tabla = build_tabla_productos(
+            parent_window, 
+            df, 
+            campos_visibles, 
+            copiar_desde_busqueda,  # <--- AQUÍ ESTABA EL ERROR
+            cart_service
+        )
+        
         resultados_layout.addWidget(tabla)
 
     btn_buscar.clicked.connect(ejecutar_busqueda)

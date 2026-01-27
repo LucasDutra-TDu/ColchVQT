@@ -5,8 +5,9 @@ from logic.credits_service import _get_connection as get_conn_credits
 from logic.facturas_db_handler import _get_connection as get_conn_invoices
 
 def obtener_reporte_mensual(mes: int, anio: int) -> dict:
-    mes_str = f"{anio}-{mes:02d}"
     
+    mes_str = f"{anio}-{mes:02d}"
+
     reporte = {
         "ventas": [],
         "totales": {
@@ -51,28 +52,28 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             # --- CÁLCULO DE BASES Y COSTOS ---
             base_efectivo_total = 0.0
-            costo_total_venta = 0.0 # Nuevo acumulador
+            costo_total_venta = 0.0
             
             for item in items:
                 cant = int(item.get('cantidad', 1))
                 
-                # 1. Base
+                # Base
                 p_base = item.get('precio_lista_base')
                 if p_base is None or float(p_base) == 0:
                     p_base = item.get('EFECTIVO/TRANSF')
                 if p_base is None or float(p_base) == 0:
                     p_base = item.get('precio_unitario', 0)
                 
-                # 2. Costo (Nuevo)
+                # Costo
                 p_costo = float(item.get('costo_historico', item.get('COSTO', 0)))
                 
                 base_efectivo_total += float(p_base) * cant
                 costo_total_venta += p_costo * cant
             
-            # --- CÁLCULO DE COMISIONES Y GANANCIA NETA ---
+            # Comisiones
             comis = calcular_comisiones(f_dict['metodo_pago'], base_efectivo_total, total_venta)
             
-            # REFINAMIENTO: Restamos el costo a la ganancia de la empresa
+            # Restamos Costo a Ganancia Empresa
             comis["empresa"] = comis["empresa"] - costo_total_venta
             
             _sumar_totales(reporte, comis, total_venta)
@@ -91,10 +92,11 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
                 "tipo_origen": "FACTURA"
             })
 
-    # B) Cuotas de CRÉDITOS
+    # B) Cuotas de CRÉDITOS (LÓGICA CORREGIDA)
     with get_conn_credits() as con:
-        # Actualizamos la consulta para traer también los items de la factura original (para sacar el costo)
-        # y la cantidad total de cuotas (para prorratear el costo)
+        # --- CAMBIO IMPORTANTE EN EL WHERE ---
+        # 1. Si está PAGADA, miramos fecha_pago.
+        # 2. Si NO está pagada, miramos fecha_vencimiento (Proyección).
         sql_cuotas = """
             SELECT c.*, cr.monto_financiado, cr.monto_base, cr.cantidad_cuotas,
                    cl.nombre, cr.id as credito_real_id,
@@ -103,9 +105,13 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             JOIN creditos cr ON c.credito_id = cr.id
             JOIN clientes cl ON cr.cliente_id = cl.id
             JOIN facturas f ON cr.factura_id = f.id
-            WHERE strftime('%Y-%m', c.fecha_vencimiento) = ?
+            WHERE 
+                (c.estado = 'PAGADO' AND strftime('%Y-%m', c.fecha_pago) = ?)
+                OR 
+                (c.estado != 'PAGADO' AND strftime('%Y-%m', c.fecha_vencimiento) = ?)
         """
-        cuotas = con.execute(sql_cuotas, (mes_str,)).fetchall()
+        # Pasamos mes_str dos veces porque hay dos placeholders ?
+        cuotas = con.execute(sql_cuotas, (mes_str, mes_str)).fetchall()
         
         for c in cuotas:
             monto_cuota = c['monto']
@@ -114,13 +120,12 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             if total_base == 0: total_base = total_financiado
             
-            # 1. Prorrateo Financiero (Para comisiones)
+            # Prorrateo Financiero
             ratio_base = total_base / total_financiado
             parte_capital = monto_cuota * ratio_base
             parte_interes = monto_cuota - parte_capital
             
-            # 2. Prorrateo de Costos (Para ganancia empresa)
-            # Calculamos el costo total original del crédito
+            # Prorrateo de Costos
             try:
                 items_origen = json.loads(c['items_json'])
             except:
@@ -132,17 +137,15 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
                 cant = int(item.get('cantidad', 1))
                 costo_total_credito += p_costo * cant
             
-            # Dividimos el costo total por la cantidad de cuotas
-            # Así, cada cuota paga su "pedacito" de costo
             cant_cuotas_total = c['cantidad_cuotas'] if c['cantidad_cuotas'] > 0 else 1
             costo_prorrateado_cuota = costo_total_credito / cant_cuotas_total
 
-            # 3. Comisiones
+            # Comisiones
             comis_gerente = (parte_capital * 0.04) + (parte_interes * 0.10)
             comis_vendedor = (parte_capital * 0.03) + (parte_interes * 0.08)
             comis_empresa_bruta = monto_cuota - (comis_gerente + comis_vendedor)
             
-            # 4. Refinamiento: Restamos el costo prorrateado
+            # Restamos Costo Prorrateado
             comis_empresa_neta = comis_empresa_bruta - costo_prorrateado_cuota
             
             comis = {
@@ -153,8 +156,13 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             _sumar_totales(reporte, comis, monto_cuota)
             
+            # Usamos la fecha real del evento (Pago o Vencimiento)
+            fecha_evento = c['fecha_pago'] if c['estado'] == 'PAGADO' and c['fecha_pago'] else c['fecha_vencimiento']
+            # Recortamos a YYYY-MM-DD por si viene con hora
+            fecha_evento = fecha_evento[:10]
+            
             reporte["ventas"].append({
-                "fecha": c['fecha_vencimiento'],
+                "fecha": fecha_evento,
                 "tipo": "CUOTA CRÉDITO",
                 "detalle": f"Cuota {c['numero_cuota']} - {c['nombre']}",
                 

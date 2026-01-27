@@ -273,7 +273,7 @@ def generar_comprobante_venta(factura: dict) -> str:
     styles = getSampleStyleSheet()
     story = []
 
-    # --- ENCABEZADO: LOGO + TÍTULO ALINEADOS (NUEVO PARA COMPROBANTE) ---
+    # --- ENCABEZADO ---
     logo = _obtener_logo_flowable()
     
     titulo_p = Paragraph("COMPROBANTE DE VENTA", styles['Heading2'])
@@ -299,20 +299,33 @@ def generar_comprobante_venta(factura: dict) -> str:
     """
     story.append(Paragraph(p_header, styles['Normal']))
     story.append(Spacer(1, 20))
-
-    # TABLA DE ITEMS (Igual que antes)
+    # --- TABLA DE ITEMS ---
     data = [["CANT", "DESCRIPCIÓN", "P. UNIT", "SUBTOTAL"]]
     items = factura.get('items', [])
     
+    # 1. Definimos un estilo para la celda de descripción
+    # Esto permite que el texto haga "salto de línea" si es muy largo
+    estilo_celda = ParagraphStyle(name='CeldaDesc', parent=styles['Normal'], fontSize=10, leading=12)
+
     for item in items:
         cant = int(item.get('cantidad', 1))
         modelo = item.get('modelo', item.get('MODELO', 'Articulo'))
         desc = item.get('descripcion', '')
+        
         nombre_completo = f"{modelo} {desc}".strip()
+        
+        # 2. Envolvemos el texto en un Paragraph
+        p_descripcion = Paragraph(nombre_completo, estilo_celda)
+        
         p_unit = float(item.get('precio_unitario', 0))
         subtotal = p_unit * cant
         
-        data.append([str(cant), nombre_completo, format_currency(p_unit), format_currency(subtotal)])
+        data.append([
+            str(cant), 
+            p_descripcion,
+            format_currency(p_unit), 
+            format_currency(subtotal)
+        ])
 
     data.append(["", "", "TOTAL", format_currency(factura['total'])])
 
@@ -320,8 +333,11 @@ def generar_comprobante_venta(factura: dict) -> str:
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
         ('TEXTCOLOR', (0,0), (-1,0), colors.black),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('ALIGN', (1,1), (1,-1), 'LEFT'),
+        
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),     # Alineación Horizontal Global: Centro
+        ('ALIGN', (1,1), (1,-1), 'LEFT'),        # Alineación Horizontal Descripción: Izquierda
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),    # Alineación Vertical: Medio (IMPORTANTE para celdas multilínea)
+        
         ('GRID', (0,0), (-1,-2), 1, colors.black),
         ('lineabove', (0,-1), (-1,-1), 1, colors.black),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),

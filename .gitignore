@@ -1,6 +1,6 @@
 # Carpeta con datos empresariales
 data/
-output_docs/
+documentos_generados/
 
 # Archivos Python compilados
 __pycache__/
