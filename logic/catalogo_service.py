@@ -86,7 +86,7 @@ def formatear_producto_para_clipboard(row: dict) -> str:
         if row.get('MATERIAL') and str(row.get('MATERIAL')) != '-': 
             partes.append(f"🧶 Material: {row.get('MATERIAL')}")
         
-        if row.get('SOPORTA (PorPlaza)') and str(row.get('SOPORTA (PORPLAZA)')) != '-':
+        if row.get('SOPORTA (PORPLAZA)') and str(row.get('SOPORTA (PORPLAZA)')) != '-':
             partes.append(f"🏋️ Soporta: {row.get('SOPORTA (PORPLAZA)')}")
 
     else:
