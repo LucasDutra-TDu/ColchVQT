@@ -1,6 +1,9 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QComboBox, QSpinBox, QLabel, QDialog, QVBoxLayout, QPushButton, QApplication, QMessageBox
+from PySide6.QtWidgets import QWidget, QSizePolicy, QHBoxLayout, QComboBox, QSpinBox, QLabel, QDialog, QVBoxLayout, QPushButton, QApplication, QMessageBox
 from PySide6.QtCore import QDate, Signal, Qt
 import os
+from PySide6.QtGui import QPixmap, QIcon
+from pathlib import Path
+
 
 class MonthYearSelector(QWidget):
     # Señal para avisar a la ventana padre que cambió la fecha
@@ -94,3 +97,70 @@ class SuccessDialog(QDialog):
                 os.startfile(folder)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"No se pudo abrir la carpeta: {e}")
+
+class ImageViewerDialog(QDialog):
+    """
+    Ventana modal para visualizar la imagen de un producto en tamaño grande.
+    """
+    def __init__(self, parent, titulo_producto: str, ruta_imagen: Path):
+        super().__init__(parent)
+        self.setWindowTitle(f"Ver Imagen - {titulo_producto}")
+        # Asegura que sea una ventana modal bloqueante
+        self.setWindowModality(Qt.WindowModal) 
+        
+        # Tamaño inicial razonable, pero permite redimensionar
+        self.resize(800, 600)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # 1. Label contenedor de la imagen
+        self.lbl_imagen = QLabel()
+        self.lbl_imagen.setAlignment(Qt.AlignCenter)
+        # Permite que la QLabel se achique/estire si redimensionamos la ventana
+        self.lbl_imagen.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) 
+        layout.addWidget(self.lbl_imagen)
+
+        # 2. Guardar la ruta y cargar la imagen inicial
+        self.ruta_imagen = str(ruta_imagen)
+        self.original_pixmap = QPixmap(self.ruta_imagen)
+        
+        # 3. Botón de Cerrar (Abajo)
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.setFixedWidth(100)
+        btn_cerrar.clicked.connect(self.close)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch() # Centrar el botón
+        button_layout.addWidget(btn_cerrar)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        # Aplicar estilos si tienes definidos para botones normales
+        # from ui.style import ESTILOS (asumiendo que está disponible)
+        # btn_cerrar.setStyleSheet(ESTILOS.get('boton_volver', ''))
+
+    def showEvent(self, event):
+        """Al mostrar la ventana, escalamos la imagen por primera vez."""
+        super().showEvent(event)
+        self.actualizar_imagen_escalada()
+
+    def resizeEvent(self, event):
+        """Al redimensionar la ventana, re-escalamos la imagen."""
+        super().resizeEvent(event)
+        if not self.original_pixmap.isNull():
+            self.actualizar_imagen_escalada()
+
+    def actualizar_imagen_escalada(self):
+        """Escala la imagen para que quepa en el QLabel actual manteniendo ratio."""
+        if self.lbl_imagen.size().width() <= 0: return
+        
+        # Calculamos la escala manteniendo la relación de aspecto
+        scaled_pixmap = self.original_pixmap.scaled(
+            self.lbl_imagen.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        self.lbl_imagen.setPixmap(scaled_pixmap)

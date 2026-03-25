@@ -22,9 +22,10 @@ from logic.financiero import calcular_plan_cuotas, format_currency, generar_text
 from logic.cart_service import CartService
 
 # Importamos las lógicas
-from logic.catalogo_service import formatear_producto_para_clipboard
 from logic.image_service import generar_flyer_producto, obtener_ruta_imagen
+from ui.widgets import ImageViewerDialog
 
+from functools import partial
 
 def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
     """Manejador del evento de cálculo de cuotas (Controller Logic)."""
@@ -127,7 +128,7 @@ def copiar_callback(info_fila):
     except Exception as e:
         print(f"Error al copiar: {e}")
 
-def build_tabla_productos(parent_window, df, campos, copiar_callback, cart_service: CartService):
+def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen_callback, cart_service: CartService):
     """Construye la tabla con botón de Carrito incluido."""
     contenedor = QWidget()
     layout_principal = QVBoxLayout(contenedor)
@@ -138,6 +139,14 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, cart_servi
     # --- Header ---
     header_layout = QHBoxLayout()
     
+    # Columna Ver Foto
+    lbl_foto_header = QLabel("")
+    lbl_foto_header.setFixedWidth(40) # Ancho pequeño
+    lbl_foto_header.setStyleSheet(ESTILOS.get("titulo_columna", ""))
+    lbl_foto_header.setFixedHeight(ESTILOS["altura_encabezado"])
+    header_layout.addWidget(lbl_foto_header)
+    # ---------------------------------
+
     # Columna Copiar (Vacia en header)
     lbl_copiar = QLabel("")
     lbl_copiar.setFixedWidth(CATALOGO_ANCHOS.get("COPIAR", 30))
@@ -197,6 +206,33 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, cart_servi
         # 2. DEFINIR ALTURA MEJORADA
         # Sumamos 10px a la altura base definida en constantes para hacer la fila "más ancha/alta"
         altura_fila_mejorada = ESTILOS.get("altura_celda", 30) + 12
+
+        row_dict = fila.to_dict() # Convertimos a dict para usar los detectores
+        
+        # --- A. NUEVO: BOTÓN VER FOTO (👁️) ---
+        btn_ver_foto = QPushButton("👁️") # Puedes usar icono cámara 📷 si prefieres
+        #btn_ver_foto.setIcon(QIcon("ruta/a/icono_ojo.png")) # Opcional con QIcon
+        
+        # Definir estilo del botón (pequeño, sin bordes raros)
+        btn_ver_foto.setFixedWidth(40)
+        btn_ver_foto.setFixedHeight(altura_fila_mejorada)
+        btn_ver_foto.setCursor(Qt.PointingHandCursor)
+        
+        # DETECCIÓN DE IMAGEN: Si no hay, deshabilitamos el botón
+        ruta_img = obtener_ruta_imagen(row_dict)
+        if not ruta_img:
+            btn_ver_foto.setEnabled(False)
+            btn_ver_foto.setToolTip("Producto sin imagen disponible")
+            # Estilo deshabilitado sutil
+            btn_ver_foto.setStyleSheet("color: #bdc3c7; background-color: transparent; border: none; font-size: 18px;")
+        else:
+            btn_ver_foto.setToolTip("Click para ver imagen grande")
+            btn_ver_foto.setStyleSheet("color: #3498db; background-color: transparent; border: none; font-size: 18px; font-weight: bold;")
+            # Conectamos al nuevo callback pasando los datos necesarios
+            btn_ver_foto.clicked.connect(partial(ver_imagen_callback, row_dict, ruta_img))
+        
+        layout_fila.addWidget(btn_ver_foto)
+        # --------------------------------------
 
         # --- Botón Copiar ---
         btn_copiar = QPushButton("📋")
@@ -297,6 +333,22 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
     campos = [c for c in CAMPOS_CATALOGO.get(tipo_producto, []) if c != "COSTO"]
     campos_visibles = [c for c in campos if c in df.columns]
     
+    # 1. Definimos la nueva función de lógica (Handler)
+    def mostrar_imagen_handler(row_dict, ruta_img_path):
+        """
+        Callback que se ejecuta al presionar el ojo 👁️.
+        Abre el Dialog modal con la imagen grande.
+        """
+        try:
+            modelo = row_dict.get('MODELO', 'Producto')
+            # Instanciamos el visualizador pasando el parent_window (para que se centre)
+            viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path)
+            # Abrimos de forma modal bloqueante
+            viewer.exec() 
+        except Exception as e:
+            QMessageBox.warning(parent_window, "Error", f"No se pudo abrir la imagen:\n{e}")
+            print(f"❌ Error al abrir visualizador: {e}")
+
     def copiar_universal_wrapper(fila_datos_series):
         """
         Decide dinámicamente si copiar un Flyer (si hay foto) 
@@ -339,8 +391,9 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
 
     # Asignamos esta función universal como el callback
     copiar_callback = copiar_universal_wrapper
+    ver_imagen_callback = mostrar_imagen_handler
 
-    tabla = build_tabla_productos(parent_window, df, campos_visibles, copiar_callback, cart_service)
+    tabla = build_tabla_productos(parent_window, df, campos_visibles, copiar_callback, ver_imagen_callback, cart_service)
     layout.addWidget(tabla)
 
     btn_volver = QPushButton("Volver al Menú")
@@ -399,37 +452,62 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
             resultados_layout.addWidget(QLabel("No se encontraron resultados."))
             return
 
-        # Lógica de columnas visibles (Mejorada)
+        # Lógica de columnas visibles
         all_cols = []
         for tipo in ["colchones", "otros"]:
             all_cols.extend(CAMPOS_CATALOGO.get(tipo, []))
         
-        # Eliminar duplicados manteniendo orden
         seen = set()
         master_list = [x for x in all_cols if not (x in seen or seen.add(x))]
-        
-        def copiar_desde_busqueda(fila_datos):
-            try:
-                texto = formatear_producto_para_clipboard(fila_datos)
-                QApplication.clipboard().setText(texto)
-                print(f"✅ (Búsqueda) Texto copiado al portapapeles")
-            except Exception as e:
-                print(f"❌ Error al copiar: {e}")
-
         campos_visibles = [c for c in master_list if c in df.columns]
 
+        # --- HANDLER 1: COPIADO INTELIGENTE ---
+        def copiar_desde_busqueda(fila_datos):
+            try:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+                row_dict = fila_datos.to_dict() if hasattr(fila_datos, 'to_dict') else fila_datos
+                clipboard = QApplication.clipboard()
+                
+                ruta_img = obtener_ruta_imagen(row_dict)
+                
+                if ruta_img:
+                    img_bytes_io = generar_flyer_producto(row_dict, ruta_img) 
+                    q_image = QImage.fromData(img_bytes_io.getvalue())
+                    if not q_image.isNull():
+                        clipboard.setImage(q_image)
+                        print(f"✅ Flyer copiado desde búsqueda: {row_dict.get('MODELO')}")
+                else:
+                    texto = formatear_producto_para_clipboard(row_dict)
+                    clipboard.setText(texto)
+                    print(f"✅ Texto copiado desde búsqueda: {row_dict.get('MODELO')}")
+
+            except Exception as e:
+                QMessageBox.warning(parent_window, "Error al copiar", f"{e}")
+            finally:
+                QApplication.restoreOverrideCursor()
+
+        # --- HANDLER 2: VISOR DE IMÁGENES (👁️) ---
+        def mostrar_imagen_handler_busqueda(row_dict, ruta_img_path):
+            try:
+                modelo = row_dict.get('MODELO', 'Producto')
+                viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path)
+                viewer.exec() 
+            except Exception as e:
+                QMessageBox.warning(parent_window, "Error", f"No se pudo abrir la imagen:\n{e}")
+
+        # Construimos la tabla del buscador
         tabla = build_tabla_productos(
             parent_window, 
             df, 
             campos_visibles, 
-            copiar_desde_busqueda,  # <--- AQUÍ ESTABA EL ERROR
-            cart_service
+            copiar_desde_busqueda,           # 4to argumento
+            mostrar_imagen_handler_busqueda, # 5to argumento
+            cart_service                     # 6to argumento
         )
         
         resultados_layout.addWidget(tabla)
 
     btn_buscar.clicked.connect(ejecutar_busqueda)
-    # Trigger con Enter
     input_busqueda.returnPressed.connect(ejecutar_busqueda)
 
     btn_volver = QPushButton("Volver al Menú")
