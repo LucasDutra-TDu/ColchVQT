@@ -210,6 +210,7 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
         row_dict = fila.to_dict() # Convertimos a dict para usar los detectores
         
         # --- A. NUEVO: BOTÓN VER FOTO (👁️) ---
+        ruta_img = obtener_ruta_imagen(row_dict)
         btn_ver_foto = QPushButton("👁️") # Puedes usar icono cámara 📷 si prefieres
         #btn_ver_foto.setIcon(QIcon("ruta/a/icono_ojo.png")) # Opcional con QIcon
         
@@ -456,7 +457,7 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
         all_cols = []
         for tipo in ["colchones", "otros"]:
             all_cols.extend(CAMPOS_CATALOGO.get(tipo, []))
-        
+
         seen = set()
         master_list = [x for x in all_cols if not (x in seen or seen.add(x))]
         campos_visibles = [c for c in master_list if c in df.columns]

@@ -7,36 +7,54 @@ from logic.financiero import format_currency # Usamos tu función existente
 import re
 from pathlib import Path
 
+
 def obtener_ruta_imagen(row: dict):
     """
-    Verifica si existe una imagen asociada al producto en el disco.
+    Verifica si existe una imagen asociada al producto. 
+    Busca de forma flexible por CÓDIGO o MODELO, manejando Floats de Pandas.
     """
-    # 1. Buscar primero CÓDIGO (con tilde), luego CODIGO, y por último MODELO
-    val_crudo = row.get('CÓDIGO', row.get('CODIGO', row.get('MODELO')))
-
-    if pd.isna(val_crudo) or val_crudo is None:
-        return None
-        
-    identificador = str(val_crudo).strip()
     
-    # 2. LIMPIEZA DEL FORMATO EXCEL ('$1.000' -> '1000')
-    # Quitamos el signo $, los puntos de miles y posibles espacios
-    identificador = identificador.replace('$', '').replace('.', '').strip()
+    # 1. Obtener el valor crudo de CÓDIGO (con tilde), CODIGO, o MODELO
+    val = row.get('CÓDIGO', row.get('CODIGO', row.get('MODELO')))
+    
+    # Checkeamos si es nulo (None o NaN de Pandas)
+    if val is None or pd.isna(val) or str(val).strip() in ['', '-', 'None', 'nan']:
+        return None
 
-    # Si después de limpiar quedó vacío o es un guion, cancelamos
-    if not identificador or identificador in ['-', 'None', 'nan', '0']:
+    # ---------------------------------------------------------
+    # 🛠️ CORAZÓN DE LA SOLUCIÓN: MANEJO DE TIPOS DE DATOS 🛠️
+    # ---------------------------------------------------------
+    try:
+        if isinstance(val, (float, int)):
+            # --- EL ARREGLO PARA EL BUG DE BÚSQUEDA ---
+            # Si val es 1000.0 (float) -> int(1000.0) es 1000 (int) -> str(1000) es "1000"
+            identificador = str(int(float(val))).strip()
+        else:
+            # Es texto normal (como "GANI-100"), solo limpiamos espacios
+            identificador = str(val).strip()
+    except Exception as e:
+        # Fallback de seguridad si la conversión numérica falla
+        print(f"⚠️ Warning: Error convirtiendo ID '{val}': {e}")
+        identificador = str(val).strip()
+    # ---------------------------------------------------------
+
+    if not identificador or identificador in ['0', 'nan']:
         return None
         
-    # 3. Sanitizar nombre para Windows (quitar caracteres prohibidos)
+    # 2. Sanitizar nombre para Windows (quitar caracteres prohibidos \/*?:"<>|)
     nombre_seguro = re.sub(r'[\\/*?:"<>|]', "", identificador).strip()
     
-    # 4. Buscar soportando varias extensiones
+    #  DIAGNÓSTICO (Opcional, descomenta si sigue fallando)
+    # print(f"🔍 DEBUG FISICO: Buscando '{nombre_seguro}.png' en {IMG_CATALOGO_DIR}")
+    
+    # 3. Buscar soportando varias extensiones comunes
     for ext in ['.png', '.jpg', '.jpeg', '.PNG', '.JPG']:
         ruta = IMG_CATALOGO_DIR / f"{nombre_seguro}{ext}"
         if ruta.exists():
             return ruta
             
     return None
+
 
 def generar_flyer_producto(row: dict, ruta_imagen: Path) -> io.BytesIO:
     """
