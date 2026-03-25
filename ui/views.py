@@ -10,6 +10,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from PySide6.QtGui import QClipboard, QImage, QPixmap
+from logic.image_service import generar_flyer_producto # Importamos el servicio nuevo
+
 # Imports Propios
 from logic.constants import ESTILOS, CAMPOS_CATALOGO, CATALOGO_ANCHOS, MAPEO_CLIPBOARD
 from logic import catalogo_service
@@ -17,6 +20,10 @@ from logic.catalogo_service import formatear_producto_para_clipboard
 # Importamos la nueva lógica financiera
 from logic.financiero import calcular_plan_cuotas, format_currency, generar_texto_clipboard
 from logic.cart_service import CartService
+
+# Importamos las lógicas
+from logic.catalogo_service import formatear_producto_para_clipboard
+from logic.image_service import generar_flyer_producto, obtener_ruta_imagen
 
 
 def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
@@ -290,19 +297,45 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
     campos = [c for c in CAMPOS_CATALOGO.get(tipo_producto, []) if c != "COSTO"]
     campos_visibles = [c for c in campos if c in df.columns]
     
-    def copiar_universal_wrapper(fila_datos):
+    def copiar_universal_wrapper(fila_datos_series):
+        """
+        Decide dinámicamente si copiar un Flyer (si hay foto) 
+        o Texto Formateado (si no hay foto).
+        """
         try:
-            # 1. Generamos el texto limpio
-            texto = formatear_producto_para_clipboard(fila_datos)
+            # Poner cursor de carga por si la generación del flyer toma un instante
+            QApplication.setOverrideCursor(Qt.WaitCursor)
             
-            # 2. Enviamos al portapapeles del sistema
+            row_dict = fila_datos_series.to_dict() if hasattr(fila_datos_series, 'to_dict') else fila_datos_series
             clipboard = QApplication.clipboard()
-            clipboard.setText(texto)
             
-            # (Opcional) Feedback en consola
-            print(f"✅ Texto copiado:\n{texto[:50]}...") 
+            # 1. Detectamos si existe la foto
+            ruta_img = obtener_ruta_imagen(row_dict)
+            
+            if ruta_img:
+                # --- MODO FLYER ---
+                # Modificamos generar_flyer_producto para que reciba la ruta_img directamente
+                # y no tenga que buscarla de nuevo.
+                img_bytes_io = generar_flyer_producto(row_dict, ruta_img) 
+                
+                q_image = QImage.fromData(img_bytes_io.getvalue())
+                if not q_image.isNull():
+                    clipboard.setImage(q_image)
+                    print(f"✅ Flyer copiado: {row_dict.get('MODELO')}")
+                else:
+                    raise Exception("Fallo al convertir la imagen para el portapapeles.")
+            else:
+                # --- MODO TEXTO (Fallback) ---
+                texto = formatear_producto_para_clipboard(row_dict)
+                clipboard.setText(texto)
+                print(f"✅ Texto copiado: {row_dict.get('MODELO')}")
+
         except Exception as e:
-            print(f"❌ Error al copiar: {e}")
+            QMessageBox.warning(parent_window, "Error de Copiado", f"No se pudo copiar el producto:\n{e}")
+            print(f"❌ Error crítico en copiado: {e}")
+        finally:
+            # Asegurar que el cursor vuelva a la normalidad incluso si hay error
+            QApplication.restoreOverrideCursor()
 
     # Asignamos esta función universal como el callback
     copiar_callback = copiar_universal_wrapper

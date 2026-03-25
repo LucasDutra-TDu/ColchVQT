@@ -1,5 +1,7 @@
 # logic/constants.py
+import sys
 import os
+from pathlib import Path
 
 # ============================
 # 📌 NOTAS PARA DESARROLLADORES
@@ -14,6 +16,24 @@ import os
 # 📁 CONFIGURACIÓN DE RUTAS
 # ============================
 LOCAL_FILENAME = "colchonería.xlsx"
+
+# --- RESOLUCIÓN DE RUTAS (Compatible con PyInstaller) ---
+if getattr(sys, 'frozen', False):
+    # Si estamos ejecutando el .exe compilado
+    BASE_DIR = Path(sys.executable).parent
+else:
+    # Si estamos ejecutando main.py desde el código fuente (saliendo de la carpeta logic/)
+    BASE_DIR = Path(__file__).parent.parent
+
+# Rutas de Datos Compartidas
+# Asumimos que BASE_DIR ya está definido apuntando a la raíz del proyecto
+DATA_DIR = BASE_DIR / "data"
+IMG_CATALOGO_DIR = DATA_DIR / "imagenes" # data/imagenes/
+RECURSOS_DIR = DATA_DIR / "recursos"     # data/recursos/
+
+# Recursos específicos para el Flyer
+RUTA_FONT_FLYER = RECURSOS_DIR / "arial.ttf" # Necesitas conseguir este archivo .ttf
+RUTA_LOGO_EMPRESA = RECURSOS_DIR / "logo_galpon.png" # Opcional .png transparente
 
 # ============================
 # 💬 MENSAJES CATEGORIZADOS
