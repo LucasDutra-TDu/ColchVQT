@@ -9,6 +9,7 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_RIGHT
 from reportlab.lib import colors
 from logic.financiero import format_currency
 from num2words import num2words
+from logic.constants import RECURSOS_DIR
 
 # --- BRÚJULA UNIVERSAL (RUTAS) ---
 def get_base_path():
@@ -170,21 +171,60 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
     Para cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción de los tribunales ordinarios de Oberá, Provincia de Misiones.
     """
     story.append(Paragraph(texto_jurisdiccion, style_body))
-    story.append(Spacer(1, 30))
+    story.append(Spacer(1, 40)) # Un buen espacio antes de las firmas
 
-    # FIRMAS (Igual que antes)
+    # --- NUEVA LÓGICA DE FIRMA DIGITAL ---
+    
+    # 1. Definimos la ruta de la firma
+    ruta_firma = RECURSOS_DIR / "firma_zacharuk.png"
+    
+    # Preparamos el objeto de imagen o un placeholder si no existe
+    img_firma_vendedor = None
+    
+    if ruta_firma.exists():
+        try:
+            # Creamos el objeto Image de ReportLab
+            # Ajustamos el tamaño (width=120px) para que no sea gigante. 
+            # height='auto' mantiene la proporción.
+            img_firma_vendedor = Image(str(ruta_firma), width=120, height=40)
+            
+            # Alineación horizontal centrada dentro de la celda de la tabla
+            img_firma_vendedor.hAlign = 'CENTER' 
+            
+        except Exception as e:
+            print(f"❌ Error cargando imagen de firma: {e}")
+            img_firma_vendedor = "___________________________" # Fallback si falla
+    else:
+        print(f"⚠️ Warning: No se encontró la firma en {ruta_firma}")
+        # Si no existe, volvemos a la línea de subrayado tradicional
+        img_firma_vendedor = "___________________________"
+
+    # 2. Reestructuramos la tabla de firmas
+    # Ahora la primera fila contiene el Objeto Imagen (izquierda) 
+    # y la línea de subrayado (derecha).
     tabla_firmas_data = [
-        ["___________________________", "___________________________"],
-        ["FIRMA VENDEDOR", "FIRMA COMPRADOR"],
-        ["El Galpón S.R.L.", f"{v['nombre']}"],
-        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"]
+        [img_firma_vendedor, "___________________________"], # Fila 1: Firma e Hilo
+        ["FIRMA VENDEDOR", "FIRMA COMPRADOR"],               # Fila 2: Etiquetas
+        ["El Galpón S.R.L.", f"{v['nombre']}"],               # Fila 3: Nombres
+        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"]           # Fila 4: IDs
     ]
+    
+    # Mantenemos los anchos de columna
     t_firmas = Table(tabla_firmas_data, colWidths=[200, 200])
-    t_firmas.setStyle(TableStyle([
+    
+    # 3. Ajustamos los estilos de la tabla
+    estilos_firmas = [
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('FONTSIZE', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 2),
-    ]))
+        # Ajustamos los paddings para que la imagen se "acerque" al texto de abajo
+        ('TOPPADDING', (0,0), (0,0), 0),      # Cero padding superior para la imagen
+        ('BOTTOMPADDING', (0,0), (0,0), -10), # Padding negativo para "pegar" la firma a la etiqueta
+        ('TOPPADDING', (0,1), (-1,-1), 2),    # Padding normal para el resto de las celdas
+    ]
+    
+    t_firmas.setStyle(TableStyle(estilos_firmas))
+    
+    # Agregamos la tabla al story final
     story.append(t_firmas)
 
 def _agregar_contenido_desglose(story, styles, cliente, plan):
