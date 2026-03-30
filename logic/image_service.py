@@ -56,26 +56,102 @@ def obtener_ruta_imagen(row: dict):
     return None
 
 
-def generar_flyer_producto(row: dict, ruta_imagen: Path) -> io.BytesIO:
+def draw_text_wrapped(draw, text, x, y, font, max_width, fill):
     """
-    Genera un flyer visual combinando foto del producto y texto completo.
+    Dibuja un texto dividiéndolo en múltiples líneas si excede el max_width.
+    Retorna la nueva coordenada Y después de dibujar.
+    """
+    lines = []
+    words = text.split()
+    
+    while words:
+        line = ''
+        while words and draw.textbbox((0, 0), line + words[0], font=font)[2] <= max_width:
+            line += (words.pop(0) + ' ')
+        lines.append(line.strip())
+    
+    current_y = y
+    for line in lines:
+        draw.text((x, current_y), line, font=font, fill=fill)
+        # Calculamos el alto de la línea para el siguiente salto
+        bbox = draw.textbbox((x, current_y), line, font=font)
+        line_height = bbox[3] - bbox[1]
+        current_y += line_height + 10 # 10px de interlineado
+        
+    return current_y
+
+
+def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None) -> io.BytesIO:
+    """
+    Genera un flyer visual combinando foto del producto, logo de la empresa y texto completo.
     """
     canvas_width = 1200
     canvas_height = 800
+    # Fondo blanco puro
     flyer = Image.new('RGB', (canvas_width, canvas_height), color='white')
     draw = ImageDraw.Draw(flyer)
 
-    # 1. Carga de Tipografía
+    # Definir tipografía por defecto (puedes usar RUTA_FONT_FLYER si la tienes)
+    # Aquí usaré fuentes genéricas para que no falle, ajústalas a tus .ttf si tienes
     try:
-        font_main = ImageFont.truetype(str(RUTA_FONT_FLYER), 32)
-        font_title = ImageFont.truetype(str(RUTA_FONT_FLYER), 45)
-        font_price = ImageFont.truetype(str(RUTA_FONT_FLYER), 38)
+        # Asumiendo que RUTA_FONT_FLYER está definida en constants
+        # font_path = str(RUTA_FONT_FLYER) 
+        # Pero usaré una ruta por defecto por seguridad:
+        font_path = "arial.ttf" # ReportLab/Pillow a veces encuentran arial
+        font_main = ImageFont.truetype(font_path, 32)
+        font_title = ImageFont.truetype(font_path, 45)
+        font_price = ImageFont.truetype(font_path, 38)
     except Exception:
+        # Fallback si no hay fuentes instaladas
         font_main = font_title = font_price = ImageFont.load_default()
 
-    text_color = (44, 62, 80)
+    text_color = (44, 62, 80) # Azul oscuro elegante
 
-    # 2. Procesamiento de la Imagen (Lado Izquierdo)
+    # ------------------------------------------------------------------------
+    # 🆕 1.1 LOGO DE LA EMPRESA (Arriba a la derecha) 🆕
+    # ------------------------------------------------------------------------
+    if ruta_logo is None:
+        ruta_logo = Path("data/recursos/elgalpon.png")
+
+    # Mantenemos el cálculo del tamaño agrandado
+    base_logo_width = 200
+    base_logo_height = 100
+    factor_escalado = 1.75
+    logo_area_size = (int(base_logo_width * factor_escalado), int(base_logo_height * factor_escalado)) 
+    
+    # Mantenemos la posición en la esquina superior derecha
+    logo_x = canvas_width - logo_area_size[0] - 50 
+    # Definimos el margen superior (Y) de forma explícita
+    margin_top_logo = 30
+    logo_y = margin_top_logo 
+
+    # Guardamos la coordenada Y inferior del logo para usarla de referencia
+    # Y inferior = Coordenada Y superior + Altura del área asignada
+    logo_bottom_y = logo_y + logo_area_size[1] 
+
+    if ruta_logo.exists():
+        try:
+            logo_img = Image.open(ruta_logo)
+            logo_img.thumbnail(logo_area_size, Image.Resampling.LANCZOS)
+            
+            if logo_img.mode == 'RGBA':
+                flyer.paste(logo_img, (logo_x, logo_y), logo_img)
+            else:
+                flyer.paste(logo_img, (logo_x, logo_y))
+            
+            # print(f"✅ Logo '{ruta_logo.name}' incrustado. Y inferior: {logo_bottom_y}.")
+        except Exception as e:
+            print(f"❌ Error al incrustar el logo: {e}")
+            # Si falla el logo, el fallback de logo_bottom_y sigue sirviendo
+    else:
+        print(f"⚠️ Warning: No se encontró el logo en {ruta_logo}. Flyer sin branding.")
+        # Fallback de seguridad si no hay logo: simulamos que termina más arriba
+        logo_bottom_y = margin_top_logo + 50 # Un margen pequeño
+
+    # ------------------------------------------------------------------------
+
+
+    # 2. Procesamiento de la Imagen del Colchón (Lado Izquierdo)
     image_area_size = (650, 650)
     image_x_offset = 50
     image_y_offset = (canvas_height - image_area_size[1]) // 2
@@ -97,27 +173,39 @@ def generar_flyer_producto(row: dict, ruta_imagen: Path) -> io.BytesIO:
             flyer.paste(prod_img, (paste_x, paste_y))
             
     except Exception as e:
-        print(f"❌ Error al incrustar la imagen: {e}")
+        print(f"❌ Error al incrustar la imagen del producto: {e}")
 
-    # 3. Lógica de Texto (Lado Derecho)
+    # 🆕 3. Lógica de Texto (Lado Derecho)
     text_x = 750
-    current_y = 120
+    max_text_width = canvas_width - text_x - 50 # Margen de 50px a la derecha
+    
+    aire_texto = -10
+    current_y = logo_bottom_y + aire_texto
 
-    # --- Título ---
+    # --- Título con Auto-Wrap ---
     marca = str(row.get('PROVEEDOR', '-')).strip().upper()
     modelo = str(row.get('MODELO', '-')).strip()
-    draw.text((text_x, current_y), f"{marca}", font=font_title, fill=text_color)
-    current_y += 50
-    draw.text((text_x, current_y), f"{modelo}", font=font_title, fill=text_color)
-    current_y += 80
 
-    # --- Atributos ---
+    # Dibujamos la Marca (Normalmente es corta, pero por las dudas usamos wrap)
+    current_y = draw_text_wrapped(draw, marca, text_x, current_y, font_title, max_text_width, text_color)
+    
+    # Espacio pequeño entre marca y modelo
+    current_y += 10 
+    
+    # Dibujamos el Modelo (Aquí es donde suele pasarse de largo)
+    current_y = draw_text_wrapped(draw, modelo, text_x, current_y, font_title, max_text_width, text_color)
+
+    # Espacio después del título antes de los detalles
+    current_y += 30 
+
+    # --- Resto de Atributos (Medida, Material, etc.) ---
+    # ... (Sigue dibujando Medida, Material, Soporta, Separador, Precios - SIN CAMBIOS) ...
+    # (El resto del código ya funciona perfecto, solo asegúrate de que esté aquí)
     medida = row.get('MEDIDA (LARG-ANCH-ESP)')
     if pd.notna(medida) and str(medida) != '-':
         draw.text((text_x, current_y), f"Medida: {medida}", font=font_main, fill=text_color)
         current_y += 45
 
-    # AGREGADO: Material
     material = row.get('MATERIAL')
     if pd.notna(material) and str(material) != '-':
         draw.text((text_x, current_y), f"Material: {material}", font=font_main, fill=text_color)
@@ -125,40 +213,34 @@ def generar_flyer_producto(row: dict, ruta_imagen: Path) -> io.BytesIO:
 
     soporta = row.get('SOPORTA (PORPLAZA)')
     if pd.notna(soporta) and str(soporta) != '-':
-        # Limpiamos posibles "KG" duplicados por si ya vienen en el Excel
         soporta_str = str(soporta).replace('KG', '').replace('kg', '').strip()
         draw.text((text_x, current_y), f"Soporta: {soporta_str} KG", font=font_main, fill=text_color)
         current_y += 45
 
-    # Separador
     current_y += 20
     draw.line([text_x, current_y, canvas_width-50, current_y], fill="lightgray", width=2)
     current_y += 40
 
-    # --- Precios ---
     precio_efectivo = row.get('EFECTIVO/TRANSF')
     if pd.notna(precio_efectivo) and str(precio_efectivo).strip() not in ['', '-', 'None']:
         if isinstance(precio_efectivo, (int, float)):
             precio_efectivo = format_currency(precio_efectivo)
-            
         draw.text((text_x, current_y), "Efectivo/Transf:", font=font_main, fill=text_color)
         current_y += 35
-        # Precio en verde para destacar
         draw.text((text_x, current_y), f"{precio_efectivo}", font=font_price, fill=(39, 174, 96))
         current_y += 60
 
-    # Tu Excel parece usar DEBIT/CREDIT o LISTA/TARJETA, revisamos ambas
     precio_tarjeta = row.get('DEBIT/CREDIT', row.get('LISTA/TARJETA'))
     if pd.notna(precio_tarjeta) and str(precio_tarjeta).strip() not in ['', '-', 'None']:
         if isinstance(precio_tarjeta, (int, float)):
             precio_tarjeta = format_currency(precio_tarjeta)
-            
         draw.text((text_x, current_y), "Lista/Tarjeta:", font=font_main, fill=text_color)
         current_y += 35
         draw.text((text_x, current_y), f"{precio_tarjeta}", font=font_price, fill=text_color)
 
-    # 4. Exportar a Bytes
+    # 4. Exportar a Bytes (Final)
     img_io = io.BytesIO()
+    # Usamos PNG para preservar transparencias y calidad
     flyer.save(img_io, format='PNG')
     img_io.seek(0)
     

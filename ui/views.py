@@ -235,18 +235,18 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
         layout_fila.addWidget(btn_ver_foto)
         # --------------------------------------
 
-        # --- Botón Copiar ---
+        # --- BOTÓN COPIAR (MODIFICADO) ---
         btn_copiar = QPushButton("📋")
         btn_copiar.setStyleSheet(ESTILOS.get('boton_copiar', ''))
         btn_copiar.setFixedWidth(CATALOGO_ANCHOS.get("COPIAR", 30))
-        # Usamos la nueva altura
         btn_copiar.setFixedHeight(altura_fila_mejorada)
         
-        info_fila = {c: f"${v:,.0f}".replace(",", ".") if isinstance(v, (int, float)) else str(v) 
-                     for c, v in fila.items()}
-        btn_copiar.clicked.connect(partial(copiar_callback, info_fila))
+        # ERROR ANTERIOR: Le pasábamos 'info_fila' (formateada con $)
+        # SOLUCIÓN: Le pasamos 'row_dict' (la data pura del DataFrame)
+        btn_copiar.clicked.connect(partial(copiar_callback, row_dict)) 
+        
         layout_fila.addWidget(btn_copiar)
-
+        
         # --- Celdas de Datos ---
         for campo in campos:
             valor_raw = fila.get(campo, "")
