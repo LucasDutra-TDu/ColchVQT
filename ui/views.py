@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from PySide6.QtGui import QClipboard, QImage, QPixmap
-from logic.image_service import generar_flyer_producto # Importamos el servicio nuevo
 
 # Imports Propios
 from logic.constants import ESTILOS, CAMPOS_CATALOGO, CATALOGO_ANCHOS, MAPEO_CLIPBOARD
@@ -338,60 +337,32 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
     def mostrar_imagen_handler(row_dict, ruta_img_path):
         """
         Callback que se ejecuta al presionar el ojo 👁️.
-        Abre el Dialog modal con la imagen grande.
+        Abre el Dialog modal con la imagen grande y los datos para el flyer.
         """
         try:
             modelo = row_dict.get('MODELO', 'Producto')
-            # Instanciamos el visualizador pasando el parent_window (para que se centre)
-            viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path)
-            # Abrimos de forma modal bloqueante
+            
+            # ¡EL CAMBIO CLAVE!: Agregamos row_dict como 4to parámetro
+            viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path, row_dict)
+            
             viewer.exec() 
         except Exception as e:
             QMessageBox.warning(parent_window, "Error", f"No se pudo abrir la imagen:\n{e}")
             print(f"❌ Error al abrir visualizador: {e}")
 
-    def copiar_universal_wrapper(fila_datos_series):
-        """
-        Decide dinámicamente si copiar un Flyer (si hay foto) 
-        o Texto Formateado (si no hay foto).
-        """
+    def copiar_solo_texto(fila_datos):
+        """Copia únicamente el texto formateado del producto al portapapeles."""
         try:
-            # Poner cursor de carga por si la generación del flyer toma un instante
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            
-            row_dict = fila_datos_series.to_dict() if hasattr(fila_datos_series, 'to_dict') else fila_datos_series
-            clipboard = QApplication.clipboard()
-            
-            # 1. Detectamos si existe la foto
-            ruta_img = obtener_ruta_imagen(row_dict)
-            
-            if ruta_img:
-                # --- MODO FLYER ---
-                # Modificamos generar_flyer_producto para que reciba la ruta_img directamente
-                # y no tenga que buscarla de nuevo.
-                img_bytes_io = generar_flyer_producto(row_dict, ruta_img) 
-                
-                q_image = QImage.fromData(img_bytes_io.getvalue())
-                if not q_image.isNull():
-                    clipboard.setImage(q_image)
-                    print(f"✅ Flyer copiado: {row_dict.get('MODELO')}")
-                else:
-                    raise Exception("Fallo al convertir la imagen para el portapapeles.")
-            else:
-                # --- MODO TEXTO (Fallback) ---
-                texto = formatear_producto_para_clipboard(row_dict)
-                clipboard.setText(texto)
-                print(f"✅ Texto copiado: {row_dict.get('MODELO')}")
-
+            row_dict = fila_datos.to_dict() if hasattr(fila_datos, 'to_dict') else dict(fila_datos)
+            texto = formatear_producto_para_clipboard(row_dict)
+            QApplication.clipboard().setText(texto)
+            print(f"📋 Texto copiado: {row_dict.get('MODELO')}")
         except Exception as e:
-            QMessageBox.warning(parent_window, "Error de Copiado", f"No se pudo copiar el producto:\n{e}")
-            print(f"❌ Error crítico en copiado: {e}")
-        finally:
-            # Asegurar que el cursor vuelva a la normalidad incluso si hay error
-            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(parent_window, "Error al copiar", f"No se pudo copiar el texto:\n{e}")
 
-    # Asignamos esta función universal como el callback
-    copiar_callback = copiar_universal_wrapper
+    # Y asegúrate de asignarlo al callback:
+    copiar_callback = copiar_solo_texto
+
     ver_imagen_callback = mostrar_imagen_handler
 
     tabla = build_tabla_productos(parent_window, df, campos_visibles, copiar_callback, ver_imagen_callback, cart_service)
@@ -462,36 +433,28 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
         master_list = [x for x in all_cols if not (x in seen or seen.add(x))]
         campos_visibles = [c for c in master_list if c in df.columns]
 
-        # --- HANDLER 1: COPIADO INTELIGENTE ---
+        # --- HANDLER 1: COPIADO CLÁSICO (SOLO TEXTO) ---
         def copiar_desde_busqueda(fila_datos):
             try:
-                QApplication.setOverrideCursor(Qt.WaitCursor)
                 row_dict = fila_datos.to_dict() if hasattr(fila_datos, 'to_dict') else fila_datos
                 clipboard = QApplication.clipboard()
                 
-                ruta_img = obtener_ruta_imagen(row_dict)
-                
-                if ruta_img:
-                    img_bytes_io = generar_flyer_producto(row_dict, ruta_img) 
-                    q_image = QImage.fromData(img_bytes_io.getvalue())
-                    if not q_image.isNull():
-                        clipboard.setImage(q_image)
-                        print(f"✅ Flyer copiado desde búsqueda: {row_dict.get('MODELO')}")
-                else:
-                    texto = formatear_producto_para_clipboard(row_dict)
-                    clipboard.setText(texto)
-                    print(f"✅ Texto copiado desde búsqueda: {row_dict.get('MODELO')}")
+                # Generamos el texto formateado como siempre
+                texto = formatear_producto_para_clipboard(row_dict)
+                clipboard.setText(texto)
+                print(f"✅ Texto copiado desde búsqueda: {row_dict.get('MODELO')}")
 
             except Exception as e:
                 QMessageBox.warning(parent_window, "Error al copiar", f"{e}")
-            finally:
-                QApplication.restoreOverrideCursor()
+
 
         # --- HANDLER 2: VISOR DE IMÁGENES (👁️) ---
         def mostrar_imagen_handler_busqueda(row_dict, ruta_img_path):
             try:
                 modelo = row_dict.get('MODELO', 'Producto')
-                viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path)
+                
+                # IMPORTANTE: Ahora le pasamos el row_dict como cuarto argumento
+                viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path, row_dict)
                 viewer.exec() 
             except Exception as e:
                 QMessageBox.warning(parent_window, "Error", f"No se pudo abrir la imagen:\n{e}")
@@ -501,8 +464,8 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
             parent_window, 
             df, 
             campos_visibles, 
-            copiar_desde_busqueda,           # 4to argumento
-            mostrar_imagen_handler_busqueda, # 5to argumento
+            copiar_desde_busqueda,           # 4to argumento (ahora solo texto)
+            mostrar_imagen_handler_busqueda, # 5to argumento (ahora pasa row_dict)
             cart_service                     # 6to argumento
         )
         
