@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_RIGHT
 from reportlab.lib import colors
@@ -170,8 +170,7 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
     <b>QUINTA: Jurisdicción</b><br/>
     Para cualquier controversia derivada del presente contrato, las partes se someten a la jurisdicción de los tribunales ordinarios de Oberá, Provincia de Misiones.
     """
-    story.append(Paragraph(texto_jurisdiccion, style_body))
-    story.append(Spacer(1, 40)) # Un buen espacio antes de las firmas
+    parrafo_jurisdiccion = Paragraph(texto_jurisdiccion, style_body)
 
     # --- NUEVA LÓGICA DE FIRMA DIGITAL ---
     
@@ -200,32 +199,37 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
         img_firma_vendedor = "___________________________"
 
     # 2. Reestructuramos la tabla de firmas
-    # Ahora la primera fila contiene el Objeto Imagen (izquierda) 
-    # y la línea de subrayado (derecha).
     tabla_firmas_data = [
-        [img_firma_vendedor, "___________________________"], # Fila 1: Firma e Hilo
-        ["FIRMA VENDEDOR", "FIRMA COMPRADOR"],               # Fila 2: Etiquetas
-        ["El Galpón S.R.L.", f"{v['nombre']}"],               # Fila 3: Nombres
-        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"]           # Fila 4: IDs
+        [img_firma_vendedor, "___________________________"], 
+        ["FIRMA VENDEDOR", "FIRMA COMPRADOR"],               
+        ["El Galpón S.R.L.", f"{v['nombre']}"],               
+        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"]           
     ]
     
-    # Mantenemos los anchos de columna
     t_firmas = Table(tabla_firmas_data, colWidths=[200, 200])
     
-    # 3. Ajustamos los estilos de la tabla
     estilos_firmas = [
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('FONTSIZE', (0,0), (-1,-1), 8),
-        # Ajustamos los paddings para que la imagen se "acerque" al texto de abajo
-        ('TOPPADDING', (0,0), (0,0), 0),      # Cero padding superior para la imagen
-        ('BOTTOMPADDING', (0,0), (0,0), -10), # Padding negativo para "pegar" la firma a la etiqueta
-        ('TOPPADDING', (0,1), (-1,-1), 2),    # Padding normal para el resto de las celdas
+        ('TOPPADDING', (0,0), (0,0), 0),      
+        ('BOTTOMPADDING', (0,0), (0,0), -10), 
+        ('TOPPADDING', (0,1), (-1,-1), 2),    
     ]
     
     t_firmas.setStyle(TableStyle(estilos_firmas))
     
-    # Agregamos la tabla al story final
-    story.append(t_firmas)
+    # ------------------------------------------------------------------------
+    # 🆕 EL ARREGLO: MANTENER TODO JUNTO 🆕
+    # Envolvemos el espacio previo y la tabla en un KeepTogether.
+    # Si la tabla no entra entera al final de la hoja, pasará entera a la siguiente.
+    # ------------------------------------------------------------------------
+    bloque_final = KeepTogether([
+        parrafo_jurisdiccion,
+        Spacer(1, 40), # El espacio que antes agregábamos suelto
+        t_firmas       # La tabla de firmas
+    ])
+    
+    story.append(bloque_final)
 
 def _agregar_contenido_desglose(story, styles, cliente, plan):
     # --- ENCABEZADO: LOGO + DATOS EMPRESA ALINEADOS (NUEVO) ---
