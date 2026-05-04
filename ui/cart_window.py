@@ -15,6 +15,7 @@ from logic.facturas_db_handler import registrar_venta
 from logic.financiero import format_currency, calcular_plan_credito
 from logic.credits_service import registrar_plan_credito
 from logic.pdf_service import generar_documentacion_credito
+from logic.stock_service import procesar_descuento_por_venta
 
 # --- Diálogo para pedir Datos del Cliente ---
 class ClienteFormDialog(QDialog):
@@ -314,6 +315,13 @@ class CartWindow(QWidget):
 
             # --- Procesamiento ---
             factura_id = registrar_venta(items_checkout, metodo, total_venta)
+
+            # ¡NUEVA LÓGICA DE STOCK! Descontamos lo vendido.
+            # Envolvemos en un try-except para que un fallo en stock no arruine la venta
+            try:
+                procesar_descuento_por_venta(items_checkout, factura_id)
+            except Exception as e:
+                print(f"❌ Error crítico descontando stock: {e}")
 
             if metodo == "Crédito de la Casa":
                 registrar_plan_credito(factura_id, cliente_data, self.plan_credito_actual)

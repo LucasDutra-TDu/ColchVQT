@@ -1,15 +1,15 @@
 # ui/main_window.py
 from typing import Dict, Any
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QToolBar, QStatusBar, QPushButton, QWidget, QHBoxLayout, QInputDialog, QLineEdit, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QToolBar, QStatusBar, QPushButton, QWidget, QHBoxLayout, QInputDialog, QLineEdit, QMessageBox, QDialog
 from PySide6.QtGui import QAction, QIcon
-
 
 from ui.catalogo_view import CatalogoView
 from ui.cart_window import CartWindow
 from ui.history_window import HistoryWindow
 from logic.cart_service import CartService
 from ui.credits_window import CreditsWindow
-from ui.stats_window import StatsWindow     
+from ui.stats_window import StatsWindow    
+from ui.widgets import StockManagerDialog 
 
 class MainWindow(QMainWindow):
     def __init__(self, data_context: Dict[str, Any], cart_service: CartService):
@@ -53,6 +53,11 @@ class MainWindow(QMainWindow):
         action_hist = QAction("📜 Historial Ventas", self)
         action_hist.triggered.connect(self.abrir_historial)
         toolbar.addAction(action_hist)
+
+        # Acción: Plataforma de Stock
+        action_stock = QAction("📦 Inventario / Stock", self)
+        action_stock.triggered.connect(self.abrir_gestor_stock)
+        toolbar.addAction(action_stock)
 
         # --- Stack Central (Catálogo) ---
         self.stack = QStackedWidget()
@@ -137,3 +142,20 @@ class MainWindow(QMainWindow):
         
         self.stats_window.show()
         self.stats_window.activateWindow() # Traer al frente
+
+    def abrir_gestor_stock(self):
+        try:
+            from ui.widgets import StockManagerDialog
+            from logic.constants import MENU_CONFIG
+            
+            # ¡MAGIA PURA!: Le pasamos el diccionario completo y tu configuración de menú.
+            # Ya no concatenamos nada, el propio dialog se encargará de gestionar las hojas.
+            dialog = StockManagerDialog(self, self.data_context, MENU_CONFIG)
+            
+            if dialog.exec() == QDialog.Accepted:
+                pass 
+                
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Error", f"No se pudo abrir el gestor de stock:\n{e}")
+

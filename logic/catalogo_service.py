@@ -1,21 +1,26 @@
+# logic/catalogo_service.py
+
 import pandas as pd
 from typing import List, Dict, Optional
+from logic.stock_service import inyectar_stock_a_df
 
 # --- Lógica de Acceso a Datos (Data Access) ---
 
 def obtener_df_por_hoja(sheets: Dict[str, pd.DataFrame], hoja_nombre: str) -> pd.DataFrame:
     """
     Obtiene y normaliza una hoja del diccionario de DataFrames.
+    AHORA CON STOCK INYECTADO.
     """
     df = sheets.get(hoja_nombre, pd.DataFrame()).copy()
     if df.empty:
         return pd.DataFrame()
         
-    # Normalización estándar: Trim y Mayúsculas
     df.columns = df.columns.str.strip().str.upper()
-    
-    # Limpieza de datos basura
     df.dropna(how='all', inplace=True)
+    
+    # Inyectamos el stock antes de devolvérselo a la interfaz
+    df = inyectar_stock_a_df(df)
+    
     return df
 
 def filtrar_por_proveedor(df: pd.DataFrame, proveedor: str) -> pd.DataFrame:
@@ -35,16 +40,15 @@ def obtener_proveedores_unicos(df: pd.DataFrame) -> List[str]:
 def buscar_producto_por_modelo(sheets: Dict[str, pd.DataFrame], termino: str) -> pd.DataFrame:
     """
     Busca productos cuyo MODELO coincida parcialmente con el término dado.
-    Busca en las hojas 'GENERAL' y 'OTROS'.
     """
     if not termino:
         return pd.DataFrame()
 
-    # Estrategia: Obtener -> Limpiar -> Concatenar -> Filtrar
     dfs_a_concatenar = []
     
     for nombre_hoja in ['GENERAL', 'OTROS']:
-        df_temp = obtener_df_por_hoja(sheets, nombre_hoja)
+        # NOTA: obtener_df_por_hoja ya nos devuelve el DF con la columna STOCK_ACTUAL inyectada.
+        df_temp = obtener_df_por_hoja(sheets, nombre_hoja) 
         if not df_temp.empty:
             dfs_a_concatenar.append(df_temp)
 
@@ -60,7 +64,6 @@ def buscar_producto_por_modelo(sheets: Dict[str, pd.DataFrame], termino: str) ->
     if 'MODELO' not in df_completo.columns:
         return pd.DataFrame()
 
-    # Búsqueda Case-Insensitive
     mask = df_completo['MODELO'].astype(str).str.contains(termino, case=False, na=False)
     return df_completo[mask]
 

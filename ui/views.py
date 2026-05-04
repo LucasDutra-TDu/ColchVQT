@@ -193,10 +193,26 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     # --- Filas ---
     for i, fila in df.iterrows():
         layout_fila = QHBoxLayout()
-        estilo_fondo = ESTILOS['fila_par'] if i % 2 == 0 else ESTILOS['fila_impar']
+
+        # --- NUEVA LÓGICA DE FONDO Y STOCK -----------------------------------------------------------------------
+        stock_actual = fila.get('STOCK_ACTUAL', 'N/A')
+        
+        # Evaluamos el color de fondo
+        if stock_actual == 0:
+            # Producto sin stock: Rojo/Naranja muy claro (para no tapar las letras)
+            estilo_fondo = "#ffe6e6" 
+        else:
+            # Producto normal o no mapeado: Intercalado clásico
+            estilo_fondo = ESTILOS.get('fila_par', '#FFFFFF') if i % 2 == 0 else ESTILOS.get('fila_impar', '#F9F9F9')
         
         fila_widget = QWidget()
-        fila_widget.setStyleSheet(f"background-color: {estilo_fondo};")
+        
+        # En PyQt/PySide a veces el hover pisa los fondos. Usamos una regla robusta:
+        fila_widget.setStyleSheet(f"""
+            QWidget {{ background-color: {estilo_fondo}; }}
+            QWidget:hover {{ background-color: #e8f4f8; }} 
+        """)
+        # --------------------------------------------------------------------------------------------------------
         
         # 1. AJUSTE DE SEPARACIÓN VERTICAL (Márgenes)
         # Antes: (0, 2, 0, 2). Ahora: (0, 8, 0, 8) para dar más aire entre filas.
