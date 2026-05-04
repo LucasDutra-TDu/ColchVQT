@@ -94,9 +94,7 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
 
     # B) Cuotas de CRÉDITOS (LÓGICA CORREGIDA)
     with get_conn_credits() as con:
-        # --- CAMBIO IMPORTANTE EN EL WHERE ---
-        # 1. Si está PAGADA, miramos fecha_pago.
-        # 2. Si NO está pagada, miramos fecha_vencimiento (Proyección).
+        # --- CAMBIO IMPORTANTE: SOLO CUOTAS PAGADAS ---
         sql_cuotas = """
             SELECT c.*, cr.monto_financiado, cr.monto_base, cr.cantidad_cuotas,
                    cl.nombre, cr.id as credito_real_id,
@@ -105,13 +103,10 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             JOIN creditos cr ON c.credito_id = cr.id
             JOIN clientes cl ON cr.cliente_id = cl.id
             JOIN facturas f ON cr.factura_id = f.id
-            WHERE 
-                (c.estado = 'PAGADO' AND strftime('%Y-%m', c.fecha_pago) = ?)
-                OR 
-                (c.estado != 'PAGADO' AND strftime('%Y-%m', c.fecha_vencimiento) = ?)
+            WHERE c.estado = 'PAGADO' AND strftime('%Y-%m', c.fecha_pago) = ?
         """
-        # Pasamos mes_str dos veces porque hay dos placeholders ?
-        cuotas = con.execute(sql_cuotas, (mes_str, mes_str)).fetchall()
+        # Ahora pasamos mes_str SOLO UNA VEZ porque hay un solo placeholder (?)
+        cuotas = con.execute(sql_cuotas, (mes_str,)).fetchall()
         
         for c in cuotas:
             monto_cuota = c['monto']
@@ -156,10 +151,10 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
             
             _sumar_totales(reporte, comis, monto_cuota)
             
-            # Usamos la fecha real del evento (Pago o Vencimiento)
-            fecha_evento = c['fecha_pago'] if c['estado'] == 'PAGADO' and c['fecha_pago'] else c['fecha_vencimiento']
-            # Recortamos a YYYY-MM-DD por si viene con hora
-            fecha_evento = fecha_evento[:10]
+            # Usamos SIEMPRE la fecha real de pago
+            fecha_evento = c['fecha_pago'][:10] if c['fecha_pago'] else c['fecha_vencimiento'][:10] 
+            # (Nota: El fallback a fecha_vencimiento lo dejo solo por extrema seguridad 
+            # en caso de que alguna cuota vieja esté marcada como PAGADO pero no tenga fecha_pago registrada)
             
             reporte["ventas"].append({
                 "fecha": fecha_evento,
