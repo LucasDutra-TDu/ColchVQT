@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QSizePolicy, QHBoxLayout, QComboBox, QSpinBox, QLabel, QDialog, QVBoxLayout, QPushButton, QApplication, QMessageBox, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QListWidget, QInputDialog, QComboBox
+from PySide6.QtWidgets import QWidget, QSizePolicy, QHBoxLayout, QComboBox, QSpinBox, QLabel, QDialog, QVBoxLayout, QPushButton, QApplication, QMessageBox, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QListWidget, QInputDialog, QComboBox, QCheckBox
 from PySide6.QtCore import QDate, Signal, Qt
 import os
 from PySide6.QtGui import QPixmap, QIcon, QImage
@@ -275,16 +275,22 @@ class StockManagerDialog(QDialog):
         # --- PANEL IZQUIERDO: BUSCADOR Y CATÁLOGO ---
         panel_izq = QVBoxLayout()
         
-        # 🆕 NUEVO: Menú Desplegable de Categorías 🆕
         self.combo_categoria = QComboBox()
         self.combo_categoria.setStyleSheet("font-size: 15px; font-weight: bold; padding: 5px;")
         self.combo_categoria.currentIndexChanged.connect(self.al_cambiar_categoria)
         panel_izq.addWidget(self.combo_categoria)
         
+        # 🆕 NUEVO: Checkbox de filtro Sin Stock 🆕
+        self.chk_sin_stock = QCheckBox("Mostrar únicamente artículos SIN STOCK")
+        self.chk_sin_stock.setStyleSheet("font-size: 13px; font-weight: bold; color: #c0392b; margin-top: 5px;")
+        self.chk_sin_stock.stateChanged.connect(self.aplicar_filtros)
+        panel_izq.addWidget(self.chk_sin_stock)
+        
         self.txt_buscar = QLineEdit()
         self.txt_buscar.setPlaceholderText("🔍 Filtrar modelo dentro de la categoría...")
         self.txt_buscar.setStyleSheet("font-size: 14px; padding: 5px;")
-        self.txt_buscar.textChanged.connect(self.filtrar_catalogo)
+        # Ahora el texto también llama al método unificado
+        self.txt_buscar.textChanged.connect(self.aplicar_filtros) 
         panel_izq.addWidget(self.txt_buscar)
 
         self.tabla_busqueda = QTableWidget()
@@ -298,7 +304,6 @@ class StockManagerDialog(QDialog):
         layout_principal.addLayout(panel_izq, 2)
 
         # --- PANEL DERECHO: CARRITO DE INGRESOS ---
-        # (Este bloque queda exactamente igual)
         panel_der = QVBoxLayout()
         lbl_titulo_carrito = QLabel("🛒 Productos a Ingresar:")
         lbl_titulo_carrito.setStyleSheet("font-size: 16px; font-weight: bold;")
@@ -347,30 +352,38 @@ class StockManagerDialog(QDialog):
         """Se dispara al elegir una opción del ComboBox."""
         from logic.catalogo_service import obtener_df_por_hoja
         
-        # Recuperamos el nombre de la hoja seleccionada (ej: "1 PLAZA")
         hoja_nombre = self.combo_categoria.currentData()
         if not hoja_nombre: return
         
-        # Le pedimos al servicio el DF ya inyectado con el stock
         self.df_actual = obtener_df_por_hoja(self.sheets_data, hoja_nombre)
         
-        # Limpiamos el texto de búsqueda y mostramos la tabla completa de la categoría
         self.txt_buscar.blockSignals(True)
         self.txt_buscar.clear()
         self.txt_buscar.blockSignals(False)
         
-        self.popular_tabla(self.df_actual)
+        # 🆕 Cambiamos popular_tabla por aplicar_filtros para que evalúe el checkbox
+        self.aplicar_filtros()
 
-    def filtrar_catalogo(self, texto):
-        if not texto:
-            self.popular_tabla(self.df_actual)
+    # 🆕 NUEVO MÉTODO UNIFICADO
+    def aplicar_filtros(self, *args):
+        """Aplica el filtro de texto y el de stock simultáneamente."""
+        if self.df_actual.empty:
             return
             
-        texto = texto.lower()
-        if 'MODELO' in self.df_actual.columns:
-            mask = self.df_actual['MODELO'].astype(str).str.lower().str.contains(texto, na=False)
-            df_filtrado = self.df_actual[mask]
-            self.popular_tabla(df_filtrado)
+        df_filtrado = self.df_actual.copy()
+        
+        # 1. Aplicamos Filtro de Stock (si está marcado)
+        if self.chk_sin_stock.isChecked():
+            # Filtramos estrictamente los que tienen stock 0 o menor
+            df_filtrado = df_filtrado[df_filtrado['STOCK_ACTUAL'] <= 0]
+            
+        # 2. Aplicamos Filtro de Texto
+        texto = self.txt_buscar.text().lower()
+        if texto and 'MODELO' in df_filtrado.columns:
+            mask = df_filtrado['MODELO'].astype(str).str.lower().str.contains(texto, na=False)
+            df_filtrado = df_filtrado[mask]
+            
+        self.popular_tabla(df_filtrado)
 
     def popular_tabla(self, df_a_mostrar):
         self.tabla_busqueda.setRowCount(0)
@@ -479,7 +492,22 @@ class StockManagerDialog(QDialog):
                 registrar_movimiento_stock(codigo, datos['cantidad'], "INGRESO", detalle)
 
             QMessageBox.information(self, "Éxito", "¡Mercadería ingresada correctamente al inventario!")
-            self.accept() # Cierra la ventana
+            
+            # --- 🆕 NUEVO COMPORTAMIENTO UX 🆕 ---
+            
+            # 1. Vaciamos el carrito de ingresos pendiente en memoria
+            self.ingresos_pendientes.clear()
+            
+            # 2. Limpiamos la lista visual de la derecha
+            self.actualizar_vista_carrito()
+            
+            # 3. Recargamos la tabla de la izquierda para que los 
+            #    números de "Stock Actual" cambien inmediatamente.
+            #    Llamar a esta función vuelve a descargar el DF con el stock fresco.
+            self.al_cambiar_categoria()
+            
+            # NOTA: Quitamos el self.accept() para que la ventana NO se cierre.
             
         except Exception as e:
             QMessageBox.critical(self, "Error Fatal", f"Fallo al guardar en la base de datos:\n{e}")
+

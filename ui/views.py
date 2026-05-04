@@ -6,7 +6,7 @@ import pandas as pd
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, 
-    QFrame, QSizePolicy, QLineEdit, QMessageBox, QInputDialog, QApplication
+    QFrame, QSizePolicy, QLineEdit, QMessageBox, QInputDialog, QApplication, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -335,39 +335,39 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
 # --- Funciones Router (Sin cambios mayores, solo limpieza) ---
 
 def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_callback: Callable, cart_service: CartService, tipo_producto: str = "colchones") -> QWidget:
-
     vista = QWidget()
     layout = QVBoxLayout(vista)
     
-    # Obtener datos
+    # Obtener datos originales
     try:
-        df = catalogo_service.obtener_df_por_hoja(sheets, key)
+        df_original = catalogo_service.obtener_df_por_hoja(sheets, key)
     except Exception as e:
         layout.addWidget(QLabel(f"Error cargando datos: {e}"))
         return vista
 
     campos = [c for c in CAMPOS_CATALOGO.get(tipo_producto, []) if c != "COSTO"]
-    campos_visibles = [c for c in campos if c in df.columns]
+    campos_visibles = [c for c in campos if c in df_original.columns]
+    
+    # 🆕 NUEVO: Checkbox de existencia
+    chk_en_stock = QCheckBox("Mostrar únicamente artículos EN EXISTENCIA (> 0)")
+    chk_en_stock.setStyleSheet("font-size: 13px; font-weight: bold; color: #27ae60; margin-bottom: 5px;")
+    layout.addWidget(chk_en_stock)
+
+    # 🆕 NUEVO: Contenedor dinámico para la tabla
+    tabla_container = QVBoxLayout()
+    layout.addLayout(tabla_container)
     
     # 1. Definimos la nueva función de lógica (Handler)
     def mostrar_imagen_handler(row_dict, ruta_img_path):
-        """
-        Callback que se ejecuta al presionar el ojo 👁️.
-        Abre el Dialog modal con la imagen grande y los datos para el flyer.
-        """
         try:
             modelo = row_dict.get('MODELO', 'Producto')
-            
-            # ¡EL CAMBIO CLAVE!: Agregamos row_dict como 4to parámetro
             viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path, row_dict)
-            
             viewer.exec() 
         except Exception as e:
             QMessageBox.warning(parent_window, "Error", f"No se pudo abrir la imagen:\n{e}")
             print(f"❌ Error al abrir visualizador: {e}")
 
     def copiar_solo_texto(fila_datos):
-        """Copia únicamente el texto formateado del producto al portapapeles."""
         try:
             row_dict = fila_datos.to_dict() if hasattr(fila_datos, 'to_dict') else dict(fila_datos)
             texto = formatear_producto_para_clipboard(row_dict)
@@ -376,13 +376,36 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
         except Exception as e:
             QMessageBox.warning(parent_window, "Error al copiar", f"No se pudo copiar el texto:\n{e}")
 
-    # Y asegúrate de asignarlo al callback:
-    copiar_callback = copiar_solo_texto
+    # 🆕 NUEVA LÓGICA: Renderizado dinámico
+    def render_tabla():
+        # Limpiamos la tabla anterior si existe
+        for i in reversed(range(tabla_container.count())):
+            widget_to_remove = tabla_container.itemAt(i).widget()
+            if widget_to_remove:
+                widget_to_remove.setParent(None)
+                
+        df_filtrado = df_original.copy()
+        
+        # Filtramos por stock si está marcado
+        if chk_en_stock.isChecked() and not df_filtrado.empty:
+            if 'STOCK_ACTUAL' in df_filtrado.columns:
+                # to_numeric fuerza los 'N/A' a NaN, y fillna los pasa a 0 para poder comparar matemáticamente
+                mask = pd.to_numeric(df_filtrado['STOCK_ACTUAL'], errors='coerce').fillna(0) > 0
+                df_filtrado = df_filtrado[mask]
 
-    ver_imagen_callback = mostrar_imagen_handler
+        if df_filtrado.empty:
+            lbl_vacio = QLabel("No hay productos con stock disponible en esta categoría.")
+            lbl_vacio.setStyleSheet("font-style: italic; color: #7f8c8d; padding: 10px;")
+            tabla_container.addWidget(lbl_vacio)
+        else:
+            tabla = build_tabla_productos(parent_window, df_filtrado, campos_visibles, copiar_solo_texto, mostrar_imagen_handler, cart_service)
+            tabla_container.addWidget(tabla)
 
-    tabla = build_tabla_productos(parent_window, df, campos_visibles, copiar_callback, ver_imagen_callback, cart_service)
-    layout.addWidget(tabla)
+    # Conectamos el checkbox para que redibuje la tabla al hacer clic
+    chk_en_stock.stateChanged.connect(render_tabla)
+
+    # Primer renderizado al abrir la vista
+    render_tabla()
 
     btn_volver = QPushButton("Volver al Menú")
     btn_volver.setStyleSheet(ESTILOS.get('boton_volver', ''))
@@ -422,6 +445,11 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
     btn_buscar.setStyleSheet(ESTILOS.get("boton_volver", ""))
     layout.addWidget(btn_buscar)
 
+    # 🆕 NUEVO: Checkbox de existencia en búsqueda
+    chk_en_stock = QCheckBox("Mostrar únicamente artículos EN EXISTENCIA (> 0)")
+    chk_en_stock.setStyleSheet("font-size: 13px; font-weight: bold; color: #27ae60; margin-bottom: 5px;")
+    layout.addWidget(chk_en_stock)
+
     resultados_layout = QVBoxLayout()
     resultados_container = QWidget()
     resultados_container.setLayout(resultados_layout)
@@ -436,8 +464,15 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
             resultados_layout.itemAt(i).widget().setParent(None)
 
         df = on_buscar(termino)
+        
+        # 🆕 NUEVA LÓGICA: Interceptamos el DF y aplicamos el filtro de stock
+        if chk_en_stock.isChecked() and not df.empty:
+            if 'STOCK_ACTUAL' in df.columns:
+                mask = pd.to_numeric(df['STOCK_ACTUAL'], errors='coerce').fillna(0) > 0
+                df = df[mask]
+
         if df.empty:
-            resultados_layout.addWidget(QLabel("No se encontraron resultados."))
+            resultados_layout.addWidget(QLabel("No se encontraron resultados (o no hay stock disponible)."))
             return
 
         # Lógica de columnas visibles
@@ -449,27 +484,21 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
         master_list = [x for x in all_cols if not (x in seen or seen.add(x))]
         campos_visibles = [c for c in master_list if c in df.columns]
 
-        # --- HANDLER 1: COPIADO CLÁSICO (SOLO TEXTO) ---
+        # --- HANDLER 1: COPIADO CLÁSICO ---
         def copiar_desde_busqueda(fila_datos):
             try:
                 row_dict = fila_datos.to_dict() if hasattr(fila_datos, 'to_dict') else fila_datos
                 clipboard = QApplication.clipboard()
-                
-                # Generamos el texto formateado como siempre
                 texto = formatear_producto_para_clipboard(row_dict)
                 clipboard.setText(texto)
                 print(f"✅ Texto copiado desde búsqueda: {row_dict.get('MODELO')}")
-
             except Exception as e:
                 QMessageBox.warning(parent_window, "Error al copiar", f"{e}")
 
-
-        # --- HANDLER 2: VISOR DE IMÁGENES (👁️) ---
+        # --- HANDLER 2: VISOR DE IMÁGENES ---
         def mostrar_imagen_handler_busqueda(row_dict, ruta_img_path):
             try:
                 modelo = row_dict.get('MODELO', 'Producto')
-                
-                # IMPORTANTE: Ahora le pasamos el row_dict como cuarto argumento
                 viewer = ImageViewerDialog(parent_window, modelo, ruta_img_path, row_dict)
                 viewer.exec() 
             except Exception as e:
@@ -480,15 +509,18 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
             parent_window, 
             df, 
             campos_visibles, 
-            copiar_desde_busqueda,           # 4to argumento (ahora solo texto)
-            mostrar_imagen_handler_busqueda, # 5to argumento (ahora pasa row_dict)
-            cart_service                     # 6to argumento
+            copiar_desde_busqueda,           
+            mostrar_imagen_handler_busqueda, 
+            cart_service                     
         )
         
         resultados_layout.addWidget(tabla)
 
     btn_buscar.clicked.connect(ejecutar_busqueda)
     input_busqueda.returnPressed.connect(ejecutar_busqueda)
+    
+    # 🆕 Conectamos el checkbox para que vuelva a buscar/filtrar automáticamente
+    chk_en_stock.stateChanged.connect(ejecutar_busqueda)
 
     btn_volver = QPushButton("Volver al Menú")
     btn_volver.setStyleSheet(ESTILOS.get('boton_volver', ''))
