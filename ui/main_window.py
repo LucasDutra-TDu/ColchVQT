@@ -148,14 +148,17 @@ class MainWindow(QMainWindow):
             from ui.widgets import StockManagerDialog
             from logic.constants import MENU_CONFIG
             
-            # ¡MAGIA PURA!: Le pasamos el diccionario completo y tu configuración de menú.
-            # Ya no concatenamos nada, el propio dialog se encargará de gestionar las hojas.
             dialog = StockManagerDialog(self, self.data_context, MENU_CONFIG)
             
-            if dialog.exec() == QDialog.Accepted:
-                pass 
+            # El programa se queda "esperando" aquí mientras el Gestor de Stock esté abierto
+            dialog.exec()
+            
+            # 🆕 CORRECCIÓN: Al cerrarse el Gestor (con la X o tecla Esc), 
+            # forzamos el refresco de las tablas sin preguntar si fue "Accepted".
+            for vista_cacheada in self.catalogo_view.active_views.values():
+                if hasattr(vista_cacheada, 'refrescar'):
+                    vista_cacheada.refrescar()
                 
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"No se pudo abrir el gestor de stock:\n{e}")
-

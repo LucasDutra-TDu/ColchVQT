@@ -194,25 +194,43 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     for i, fila in df.iterrows():
         layout_fila = QHBoxLayout()
 
-        # --- NUEVA LÓGICA DE FONDO Y STOCK -----------------------------------------------------------------------
-        stock_actual = fila.get('STOCK_ACTUAL', 'N/A')
+        # --- NUEVA LÓGICA DE COLORES (Stock Negativo y Verdes de Existencia) ---
         
-        # Evaluamos el color de fondo
-        if stock_actual == 0:
-            # Producto sin stock: Rojo/Naranja muy claro (para no tapar las letras)
-            estilo_fondo = "#ffe6e6" 
+        # 1. Obtenemos el stock y nos aseguramos de que sea un número para comparar
+        stock_val = fila.get('STOCK_ACTUAL', 'N/A')
+        try:
+            # Convertimos a entero para la comparación lógica
+            stock_numerico = int(stock_val) if str(stock_val).replace('-','').isdigit() else None
+        except:
+            stock_numerico = None
+
+        # 2. Definición de la paleta de colores
+        COLOR_ALERTA_ROJO = "#ffe6e6"   # Para stock <= 0
+        COLOR_VERDE_PAR = "#f1f8e9"     # Verde muy claro (Menta)
+        COLOR_VERDE_IMPAR = "#e8f5e9"   # Verde un poco más intenso (Esmeralda suave)
+
+        # 3. Determinamos el color de fondo de la fila
+        if stock_numerico is not None and stock_numerico <= 0:
+            # ¡SOLUCIÓN #1!: Ahora incluye negativos (0, -1, -2...)
+            estilo_fondo = COLOR_ALERTA_ROJO
         else:
-            # Producto normal o no mapeado: Intercalado clásico
-            estilo_fondo = ESTILOS.get('fila_par', '#FFFFFF') if i % 2 == 0 else ESTILOS.get('fila_impar', '#F9F9F9')
+            # ¡SOLUCIÓN #2!: Alternancia entre dos tonos de verde para stock > 0
+            estilo_fondo = COLOR_VERDE_PAR if i % 2 == 0 else COLOR_VERDE_IMPAR
         
         fila_widget = QWidget()
         
-        # En PyQt/PySide a veces el hover pisa los fondos. Usamos una regla robusta:
+        # Aplicamos el estilo con un hover sutil para no perder la referencia de la fila
         fila_widget.setStyleSheet(f"""
-            QWidget {{ background-color: {estilo_fondo}; }}
-            QWidget:hover {{ background-color: #e8f4f8; }} 
+            QWidget {{ 
+                background-color: {estilo_fondo}; 
+                border-bottom: 1px solid #dcdcdc; 
+            }}
+            QWidget:hover {{ 
+                background-color: #dcedc8; /* Un verde un poco más oscuro al pasar el mouse */
+            }} 
         """)
-        # --------------------------------------------------------------------------------------------------------
+
+        #-------------------------------------------------------------------------------------------
         
         # 1. AJUSTE DE SEPARACIÓN VERTICAL (Márgenes)
         # Antes: (0, 2, 0, 2). Ahora: (0, 8, 0, 8) para dar más aire entre filas.
@@ -411,6 +429,19 @@ def build_categoria_view(parent_window: QWidget, key: str, sheets: dict, volver_
     btn_volver.setStyleSheet(ESTILOS.get('boton_volver', ''))
     btn_volver.clicked.connect(volver_callback)
     layout.addWidget(btn_volver)
+    
+    # 🆕 NUEVA LÓGICA DE REFRESCO 🆕
+    def refrescar_datos():
+        nonlocal df_original # Permite modificar la variable de la función padre
+        try:
+            # Volvemos a pedir los datos frescos a la BD y Sheets
+            df_original = catalogo_service.obtener_df_por_hoja(sheets, key)
+            render_tabla() # Redibujamos la tabla con los colores nuevos
+        except Exception as e:
+            print(f"Error al refrescar categoría: {e}")
+
+    # Le "pegamos" este método al widget para poder llamarlo desde afuera
+    vista.refrescar = refrescar_datos 
 
     return vista
 
@@ -526,5 +557,12 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
     btn_volver.setStyleSheet(ESTILOS.get('boton_volver', ''))
     btn_volver.clicked.connect(volver_callback)
     layout.addWidget(btn_volver)
+
+    # 🆕 NUEVA LÓGICA DE REFRESCO 🆕
+    def refrescar_datos():
+        # Simplemente forzamos a que busque de nuevo con el texto que ya está escrito
+        ejecutar_busqueda()
+
+    vista.refrescar = refrescar_datos
 
     return vista
