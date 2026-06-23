@@ -65,7 +65,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(action_stock)
 
         # Acción: Proveedores / Compras
-        action_prov = QAction("🛒 Proveedores / Compras", self)
+        action_prov = QAction("💲 Proveedores / Compras", self)
         action_prov.triggered.connect(self.abrir_proveedores)
         toolbar.addAction(action_prov)
 

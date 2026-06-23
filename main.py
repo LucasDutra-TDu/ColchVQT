@@ -7,7 +7,7 @@ from logic.constants import messages
 from logic.cart_service import CartService
 
 # Comando PyInstaller
-# pyinstaller --onedir --windowed --icon="elgalpon.ico" main.py
+# pyinstaller --onedir --windowed --icon="elgalpon.ico" --name="Colchoneria Gestion x.x" main.py
 
 def show_critical_error(title: str, message: str):
     """Helper para mostrar errores críticos antes de que exista la ventana principal."""
