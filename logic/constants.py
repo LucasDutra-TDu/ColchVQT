@@ -71,11 +71,11 @@ CATALOGO_UI = {
 # === CAMPOS ESPERADOS POR SECCIÓN ===
 CAMPOS_CATALOGO = {
     "colchones": [
-        "PROVEEDOR", "MODELO", "MEDIDA (LARG-ANCH-ESP)", "MATERIAL",
+        "STOCK_ACTUAL", "PROVEEDOR", "MODELO", "MEDIDA (LARG-ANCH-ESP)", "MATERIAL",
         "SOPORTA (PORPLAZA)", "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ],
     "otros": [
-        "CARACTERISTICAS", "MODELO",
+        "STOCK_ACTUAL", "CARACTERISTICAS", "MODELO",
         "EFECTIVO/TRANSF", "DEBIT/CREDIT"
     ]
 }
@@ -83,6 +83,7 @@ CAMPOS_CATALOGO = {
 # === ANCHOS DE COLUMNA PARA CATALOGO VISUAL ===
 CATALOGO_ANCHOS = {
     "COPIAR": 25,
+    "STOCK_ACTUAL": 70,
     "PROVEEDOR": 100,
     "MODELO": 340,
     "CARACTERISTICAS": 250,
@@ -99,15 +100,18 @@ ESTILOS = {
     "boton_copiar": "font-size: 13px; padding: 0px 2px; background-color: #aaccee; color: #000;",
     "boton_ver_mas": "font-size: 13px; padding: 2px 6px; background-color: #ddd; color: #000;",
     "boton_volver": "font-size: 14px; padding: 6px 10px; background-color: #ccc; color: #000; font-weight: bold;",
-    "titulo_columna": "padding: 0 2px; font-size: 13px; color: black; font-family: 'Arial Narrow', Arial, sans-serif;",
-    "celda_texto": "padding: 0 2px; font-size: 18px; color: black;",
-    "celda_numero": "padding: 0 2px; font-size: 20px; color: black; qproperty-alignment: 'AlignRight';",
-    "header_fondo": "#ddd",
-    "fila_par": "#fff8d0",     # amarillo claro
-    "fila_impar": "#f0f0f0",   # gris claro
-    "padding_fila": "padding: 4px;",
-    "altura_celda": 26,
-    "altura_encabezado": 32,
+    "titulo_columna": "padding: 6px 2px; font-size: 13px; font-weight: bold; color: white; background: transparent; font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;",
+    "celda_texto": "padding: 0 4px; font-size: 16px; color: #2c3e50; font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;",
+    "celda_modelo": "padding: 0 4px; font-size: 16px; font-weight: bold; color: #2c3e50; font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;",
+    "celda_numero": "padding: 0 4px; font-size: 18px; color: #7f8c8d; qproperty-alignment: 'AlignRight'; font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;",
+    "celda_precio_efectivo": "padding: 0 4px; font-size: 19px; font-weight: bold; color: #27ae60; qproperty-alignment: 'AlignRight'; font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;",
+    "header_fondo": "#404040", # Gris oscuro
+    "fila_par": "#f4f4f4",     # Gris claro
+    "fila_impar": "#fffde7",   # Amarillo leve
+    "fila_hover": "#f1f3f5",   # Gris azulado muy tenue
+    "padding_fila": "padding: 6px;",
+    "altura_celda": 30,
+    "altura_encabezado": 36,
     "popup_detalle": {
         "titulo": "Crédito de La Casa",
         "icono": "information"

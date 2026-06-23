@@ -136,7 +136,10 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     layout_principal.setSpacing(0)
 
     # --- Header ---
-    header_layout = QHBoxLayout()
+    header_widget = QWidget()
+    header_widget.setStyleSheet(f"background-color: {ESTILOS.get('header_fondo', '#404040')}; border-radius: 4px;")
+    header_layout = QHBoxLayout(header_widget)
+    header_layout.setContentsMargins(0, 0, 0, 0)
     
     # Columna Ver Foto
     lbl_foto_header = QLabel("")
@@ -152,7 +155,7 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     header_layout.addWidget(lbl_copiar)
 
     for campo in campos:
-        label = QLabel(campo)
+        label = QLabel("STOCK" if campo == "STOCK_ACTUAL" else campo)
 
         # 1. Mantenemos el ancho fijo por columna
         label.setFixedWidth(CATALOGO_ANCHOS.get(campo, 100))
@@ -179,7 +182,7 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     lbl_acciones.setFixedHeight(ESTILOS["altura_encabezado"])
     header_layout.addWidget(lbl_acciones)
     
-    layout_principal.addLayout(header_layout)
+    layout_principal.addWidget(header_widget)
 
     # --- Helper para agregar al carrito con feedback ---
     def _agregar_click(fila_series):
@@ -194,39 +197,22 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
     for i, fila in df.iterrows():
         layout_fila = QHBoxLayout()
 
-        # --- NUEVA LÓGICA DE COLORES (Stock Negativo y Verdes de Existencia) ---
+        # --- NUEVA LÓGICA DE COLORES ---
         
-        # 1. Obtenemos el stock y nos aseguramos de que sea un número para comparar
-        stock_val = fila.get('STOCK_ACTUAL', 'N/A')
-        try:
-            # Convertimos a entero para la comparación lógica
-            stock_numerico = int(stock_val) if str(stock_val).replace('-','').isdigit() else None
-        except:
-            stock_numerico = None
-
-        # 2. Definición de la paleta de colores
-        COLOR_ALERTA_ROJO = "#ffe6e6"   # Para stock <= 0
-        COLOR_VERDE_PAR = "#f1f8e9"     # Verde muy claro (Menta)
-        COLOR_VERDE_IMPAR = "#e8f5e9"   # Verde un poco más intenso (Esmeralda suave)
-
-        # 3. Determinamos el color de fondo de la fila
-        if stock_numerico is not None and stock_numerico <= 0:
-            # ¡SOLUCIÓN #1!: Ahora incluye negativos (0, -1, -2...)
-            estilo_fondo = COLOR_ALERTA_ROJO
-        else:
-            # ¡SOLUCIÓN #2!: Alternancia entre dos tonos de verde para stock > 0
-            estilo_fondo = COLOR_VERDE_PAR if i % 2 == 0 else COLOR_VERDE_IMPAR
+        COLOR_PAR = ESTILOS.get("fila_par", "#ffffff")
+        COLOR_IMPAR = ESTILOS.get("fila_impar", "#f9f9f9")
+        estilo_fondo = COLOR_PAR if i % 2 == 0 else COLOR_IMPAR
         
         fila_widget = QWidget()
         
-        # Aplicamos el estilo con un hover sutil para no perder la referencia de la fila
+        # Aplicamos el estilo con un hover sutil y bordes
         fila_widget.setStyleSheet(f"""
             QWidget {{ 
                 background-color: {estilo_fondo}; 
-                border-bottom: 1px solid #dcdcdc; 
+                border-bottom: 1px solid #e0e0e0; 
             }}
             QWidget:hover {{ 
-                background-color: #dcedc8; /* Un verde un poco más oscuro al pasar el mouse */
+                background-color: {ESTILOS.get('fila_hover', '#f1f3f5')};
             }} 
         """)
 
@@ -284,11 +270,22 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
         for campo in campos:
             valor_raw = fila.get(campo, "")
             texto_celda = str(valor_raw)
-            estilo_celda = ESTILOS.get("celda_texto", "")
-
-            if isinstance(valor_raw, (int, float)):
+            
+            # Jerarquía Tipográfica
+            if campo == "MODELO":
+                estilo_celda = ESTILOS.get("celda_modelo", "")
+            elif campo == "EFECTIVO/TRANSF":
+                if isinstance(valor_raw, (int, float)):
+                    texto_celda = format_currency(valor_raw)
+                estilo_celda = ESTILOS.get("celda_precio_efectivo", "")
+            elif isinstance(valor_raw, (int, float)) and campo != "STOCK_ACTUAL":
                 texto_celda = format_currency(valor_raw)
                 estilo_celda = ESTILOS.get("celda_numero", "")
+            elif campo == "STOCK_ACTUAL":
+                texto_celda = str(valor_raw)
+                estilo_celda = "padding: 0 4px; font-size: 18px; font-weight: bold; color: #34495e; qproperty-alignment: 'AlignCenter';"
+            else:
+                estilo_celda = ESTILOS.get("celda_texto", "")
             
             label = QLabel(texto_celda)
             label.setFixedWidth(CATALOGO_ANCHOS.get(campo, 100))
