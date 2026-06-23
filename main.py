@@ -6,6 +6,9 @@ from logic.data_loader import descargar_archivo, cargar_hojas
 from logic.constants import messages
 from logic.cart_service import CartService
 
+# Comando PyInstaller
+# pyinstaller --onedir --windowed --icon="elgalpon.ico" main.py
+
 def show_critical_error(title: str, message: str):
     """Helper para mostrar errores críticos antes de que exista la ventana principal."""
     app_instance = QApplication.instance()

@@ -1,6 +1,7 @@
 # Carpeta con datos empresariales
 data/
 documentos_generados/
+samples/
 
 # Archivos Python compilados
 __pycache__/

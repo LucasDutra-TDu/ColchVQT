@@ -10,6 +10,8 @@ from logic.cart_service import CartService
 from ui.credits_window import CreditsWindow
 from ui.stats_window import StatsWindow    
 from ui.widgets import StockManagerDialog 
+from ui.proveedores_window import ProveedoresWindow
+from logic.proveedores_service import ProveedoresService
 
 class MainWindow(QMainWindow):
     def __init__(self, data_context: Dict[str, Any], cart_service: CartService):
@@ -22,6 +24,9 @@ class MainWindow(QMainWindow):
         self.w_historial = None
         self.w_creditos = None
         self.w_stats = None
+        self.w_proveedores = None
+        
+        self.proveedores_service = ProveedoresService()
 
         # --- CONEXIÓN DE SEÑAL AUTOMÁTICA ---
         # Cada vez que el servicio diga "cambié", ejecutamos _on_cart_update
@@ -58,6 +63,11 @@ class MainWindow(QMainWindow):
         action_stock = QAction("📦 Inventario / Stock", self)
         action_stock.triggered.connect(self.abrir_gestor_stock)
         toolbar.addAction(action_stock)
+
+        # Acción: Proveedores / Compras
+        action_prov = QAction("🛒 Proveedores / Compras", self)
+        action_prov.triggered.connect(self.abrir_proveedores)
+        toolbar.addAction(action_prov)
 
         # --- Stack Central (Catálogo) ---
         self.stack = QStackedWidget()
@@ -162,3 +172,11 @@ class MainWindow(QMainWindow):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"No se pudo abrir el gestor de stock:\n{e}")
+
+    def abrir_proveedores(self):
+        if self.w_proveedores is None:
+            self.w_proveedores = ProveedoresWindow(self.proveedores_service, self)
+        self.w_proveedores.actualizar_tabla()
+        self.w_proveedores.show()
+        self.w_proveedores.raise_()
+        self.w_proveedores.activateWindow()
