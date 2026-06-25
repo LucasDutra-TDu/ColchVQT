@@ -12,6 +12,8 @@ class FormaPago(Enum):
     NINGUNA = "Ninguna"
     EFECTIVO = "Efectivo"
     TRANSFERENCIA = "Transferencia"
+    CHEQUE = "Cheque"
+    ECHEQ = "E-Check"
 
 # --- Models ---
 class MovimientoProveedor:
@@ -22,12 +24,14 @@ class MovimientoProveedor:
                  haber: float = 0.0,
                  descripcion: str = "",
                  forma_pago: FormaPago = FormaPago.NINGUNA,
+                 ruta_comprobante: str = "",
                  id: str = None):
         self.fecha = fecha
         self.debe = debe
         self.haber = haber
         self.descripcion = descripcion
         self.forma_pago = forma_pago
+        self.ruta_comprobante = ruta_comprobante
         self.id = id if id is not None else str(uuid.uuid4())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -38,6 +42,7 @@ class MovimientoProveedor:
             "haber": self.haber,
             "descripcion": self.descripcion,
             "forma_pago": self.forma_pago.value,
+            "ruta_comprobante": getattr(self, 'ruta_comprobante', '')
         }
 
     @classmethod
@@ -53,6 +58,7 @@ class MovimientoProveedor:
             haber=float(data.get('haber', 0.0)),
             descripcion=data.get('descripcion', ''),
             forma_pago=forma_pago_enum,
+            ruta_comprobante=data.get('ruta_comprobante', ''),
             id=data.get('id')
         )
 
@@ -73,7 +79,7 @@ class Proveedor:
     @property
     def total_haber(self) -> float: return sum(mov.haber for mov in self.movimientos)
     @property
-    def saldo(self) -> float: return self.total_debe - self.total_haber
+    def saldo(self) -> float: return self.total_haber - self.total_debe
     @property
     def ultimo_movimiento_fecha(self) -> Optional[datetime.datetime]:
         if not self.movimientos: return None
@@ -231,3 +237,17 @@ class ProveedoresService:
             self.guardar_proveedores()
             return True
         return False
+
+    def gestionar_comprobante(self, movimiento_id: str, ruta_archivo_origen: str) -> Optional[str]:
+        comprobantes_dir = BASE_DIR / "data" / "comprobantes"
+        comprobantes_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            import os, shutil
+            _, ext = os.path.splitext(ruta_archivo_origen)
+            nombre_destino = f"{movimiento_id}{ext}"
+            ruta_destino = comprobantes_dir / nombre_destino
+            shutil.copy(ruta_archivo_origen, ruta_destino)
+            return str(ruta_destino)
+        except Exception as e:
+            print(f"Error al gestionar comprobante: {e}")
+            return None

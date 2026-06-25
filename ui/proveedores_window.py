@@ -4,10 +4,10 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, 
     QMessageBox, QDialog, QLabel, QFormLayout, QComboBox, QDoubleSpinBox,
-    QTextEdit, QDateEdit
+    QTextEdit, QDateEdit, QFileDialog
 )
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor, QFont, QDoubleValidator
+from PySide6.QtCore import Qt, QDate, QUrl
+from PySide6.QtGui import QColor, QFont, QDoubleValidator, QDesktopServices
 
 from logic.proveedores_service import ProveedoresService, FormaPago
 
@@ -176,13 +176,14 @@ class ProveedorDetailDialog(QDialog):
         self.layout.addLayout(top_layout)
         
         # --- Table ---
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Fecha", "Descripción", "Debe ($)", "Haber ($)", "Forma de Pago"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Fecha", "Descripción", "Debe ($)", "Haber ($)", "Forma de Pago", "Comprobante"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -234,15 +235,26 @@ class ProveedorDetailDialog(QDialog):
             
             item_debe = QTableWidgetItem(f"${mov.debe:,.2f}" if mov.debe != 0 else "")
             item_debe.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            if mov.debe != 0:
+                item_debe.setForeground(QColor("red"))
             self.table.setItem(row, 2, item_debe)
             
             item_haber = QTableWidgetItem(f"${mov.haber:,.2f}" if mov.haber != 0 else "")
             item_haber.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            if mov.haber != 0:
+                item_haber.setForeground(QColor("green"))
             self.table.setItem(row, 3, item_haber)
             
             self.table.setItem(row, 4, QTableWidgetItem(mov.forma_pago.value))
             
-            pass
+            # --- Comprobante ---
+            if getattr(mov, 'ruta_comprobante', ''):
+                btn_ver_comp = QPushButton("Ver")
+                btn_ver_comp.setStyleSheet("padding: 2px 5px;")
+                btn_ver_comp.clicked.connect(lambda checked=False, r=mov.ruta_comprobante: QDesktopServices.openUrl(QUrl.fromLocalFile(r)))
+                self.table.setCellWidget(row, 5, btn_ver_comp)
+            else:
+                self.table.setItem(row, 5, QTableWidgetItem(""))
                     
         saldo = self.proveedor.saldo
         self.lbl_saldo.setText(f"Saldo Total: ${saldo:,.2f}")
@@ -266,8 +278,13 @@ class ProveedorDetailDialog(QDialog):
         dialog = MovimientoFormDialog(self)
         if dialog.exec() == QDialog.Accepted:
             datos = dialog.get_data()
-            if self.proveedores_service.agregar_movimiento(self.proveedor_id, datos):
-                self.actualizar_vista()
+            ruta_origen = datos.pop("ruta_comprobante_origen", "")
+            mov_creado = self.proveedores_service.agregar_movimiento(self.proveedor_id, datos)
+            if mov_creado and ruta_origen:
+                ruta_dest = self.proveedores_service.gestionar_comprobante(mov_creado.id, ruta_origen)
+                if ruta_dest:
+                    self.proveedores_service.editar_movimiento(self.proveedor_id, mov_creado.id, {"ruta_comprobante": ruta_dest})
+            self.actualizar_vista()
                 
     def editar_movimiento(self, row, column):
         item = self.table.item(row, 0)
@@ -279,6 +296,11 @@ class ProveedorDetailDialog(QDialog):
         dialog = MovimientoFormDialog(self, movimiento)
         if dialog.exec() == QDialog.Accepted:
             datos = dialog.get_data()
+            ruta_origen = datos.pop("ruta_comprobante_origen", "")
+            if ruta_origen and ruta_origen != getattr(movimiento, 'ruta_comprobante', ''):
+                ruta_dest = self.proveedores_service.gestionar_comprobante(mov_id, ruta_origen)
+                if ruta_dest:
+                    datos["ruta_comprobante"] = ruta_dest
             self.proveedores_service.editar_movimiento(self.proveedor_id, mov_id, datos)
             self.actualizar_vista()
 
@@ -327,6 +349,11 @@ class MovimientoFormDialog(QDialog):
         for fp in FormaPago:
             self.forma_pago_input.addItem(fp.value, fp.value)
             
+        self.ruta_comprobante_seleccionada = ""
+        self.btn_seleccionar_comp = QPushButton("Seleccionar Comprobante")
+        self.btn_seleccionar_comp.clicked.connect(self.seleccionar_archivo)
+        self.lbl_comprobante = QLabel("Ningún archivo seleccionado")
+            
         if movimiento:
             qdate = QDate(movimiento.fecha.year, movimiento.fecha.month, movimiento.fecha.day)
             self.fecha_input.setDate(qdate)
@@ -336,12 +363,18 @@ class MovimientoFormDialog(QDialog):
             index = self.forma_pago_input.findData(movimiento.forma_pago.value)
             if index >= 0:
                 self.forma_pago_input.setCurrentIndex(index)
+            self.ruta_comprobante_seleccionada = getattr(movimiento, 'ruta_comprobante', '')
+            if self.ruta_comprobante_seleccionada:
+                import os
+                self.lbl_comprobante.setText(os.path.basename(self.ruta_comprobante_seleccionada))
                 
         layout.addRow("Fecha:", self.fecha_input)
-        layout.addRow("Debe (Pago):", self.debe_input)
-        layout.addRow("Haber (Compra):", self.haber_input)
+        layout.addRow("Debe:", self.debe_input)
+        layout.addRow("Haber:", self.haber_input)
         layout.addRow("Descripción:", self.desc_input)
         layout.addRow("Forma de Pago:", self.forma_pago_input)
+        layout.addRow("Comprobante:", self.btn_seleccionar_comp)
+        layout.addRow("", self.lbl_comprobante)
         
         btn_layout = QHBoxLayout()
         btn_ok = QPushButton("Guardar")
@@ -353,6 +386,13 @@ class MovimientoFormDialog(QDialog):
         btn_layout.addWidget(btn_cancel)
         layout.addRow(btn_layout)
         
+    def seleccionar_archivo(self):
+        ruta, _ = QFileDialog.getOpenFileName(self, "Seleccionar Comprobante", "", "Archivos (*.pdf *.png *.jpg *.jpeg)")
+        if ruta:
+            self.ruta_comprobante_seleccionada = ruta
+            import os
+            self.lbl_comprobante.setText(os.path.basename(ruta))
+            
     def get_data(self):
         qdate = self.fecha_input.date()
         fecha_obj = datetime.datetime(qdate.year(), qdate.month(), qdate.day(), datetime.datetime.now().hour, datetime.datetime.now().minute)
@@ -361,5 +401,6 @@ class MovimientoFormDialog(QDialog):
             "debe": float(self.debe_input.text().replace(',', '.') or 0.0),
             "haber": float(self.haber_input.text().replace(',', '.') or 0.0),
             "descripcion": self.desc_input.toPlainText().strip(),
-            "forma_pago": self.forma_pago_input.currentData()
+            "forma_pago": self.forma_pago_input.currentData(),
+            "ruta_comprobante_origen": self.ruta_comprobante_seleccionada
         }
