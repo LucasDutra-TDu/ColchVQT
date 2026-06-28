@@ -24,7 +24,7 @@ DIR_CONTRATOS = DOCS_ROOT / "contratos_credito"
 DIR_COMPROBANTES = DOCS_ROOT / "comprobantes_venta"
 
 # Ruta del Logo
-LOGO_PATH = BASE_DIR / "elgalpon.png"
+LOGO_PATH = RECURSOS_DIR / "elgalpon.png"
 
 def ensure_dirs():
     if not DOCS_ROOT.exists(): DOCS_ROOT.mkdir(parents=True)
@@ -73,14 +73,14 @@ def generar_documentacion_credito(cliente: dict, items: list, plan: dict) -> str
     return str(filepath)
 
 def _agregar_contenido_contrato(story, styles, cliente, items, plan):
-    style_body = ParagraphStyle(name='Justify', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=10, leading=14)
-    # El estilo Title ya viene centrado por defecto en getSampleStyleSheet()
-
-    # --- ENCABEZADO: LOGO + TÍTULO ALINEADOS (NUEVO) ---
+    style_body = ParagraphStyle(name='Justify', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=10, leading=14, textColor=colors.HexColor('#222222'))
+    
+    # --- ENCABEZADO: LOGO + TÍTULO ALINEADOS ---
     logo = _obtener_logo_flowable()
     
-    # Creamos el párrafo del título
-    titulo_p = Paragraph("CONTRATO DE COMPRAVENTA DE BIEN MUEBLE", styles['Title'])
+    estilo_titulo_contrato = ParagraphStyle('TituloContrato', parent=styles['Heading2'], fontSize=14, leading=16, alignment=1, textColor=colors.HexColor('#2c3e50'))
+    
+    titulo_p = Paragraph("<b>CONTRATO DE COMPRAVENTA DE BIEN MUEBLE</b>", estilo_titulo_contrato)
     
     # Datos de la tabla: [Columna 1 (Logo), Columna 2 (Título)]
     data_header = [[logo if logo else "", titulo_p]]
@@ -203,16 +203,19 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
         [img_firma_vendedor, "___________________________"], 
         ["FIRMA VENDEDOR", "FIRMA COMPRADOR"],               
         ["El Galpón S.R.L.", f"{v['nombre']}"],               
-        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"]           
+        ["CUIT: 33-71080122-9", f"DNI: {v['dni']}"],
+        ["Av. Alberdi 950 - Oberá, Misiones", ""]
     ]
     
     t_firmas = Table(tabla_firmas_data, colWidths=[200, 200])
     
     estilos_firmas = [
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0,1), (-1,1), colors.HexColor('#444444')),
         ('TOPPADDING', (0,0), (0,0), 0),      
-        ('BOTTOMPADDING', (0,0), (0,0), -10), 
+        ('BOTTOMPADDING', (0,0), (0,0), -5), 
         ('TOPPADDING', (0,1), (-1,-1), 2),    
     ]
     
@@ -232,13 +235,14 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
     story.append(bloque_final)
 
 def _agregar_contenido_desglose(story, styles, cliente, plan):
-    # --- ENCABEZADO: LOGO + DATOS EMPRESA ALINEADOS (NUEVO) ---
+    # --- ENCABEZADO: LOGO + DATOS EMPRESA ALINEADOS ---
     logo = _obtener_logo_flowable()
     
-    # Agrupamos los datos de la empresa en una lista para una sola celda
+    estilo_empresa = ParagraphStyle('EmpNormal', parent=styles['Normal'], alignment=1, fontSize=10, textColor=colors.HexColor('#555555'))
+    
     datos_empresa = [
-        Paragraph("Av. Alberdi 950 - Oberá, Misiones", styles['Normal']),
-        Paragraph("Tel: 424566 | Cel: +54 3755 688810", styles['Normal'])
+        Paragraph("Av. Alberdi 950 - Oberá, Misiones", estilo_empresa),
+        Paragraph("Tel: 424566 | Cel: +54 3755 688810", estilo_empresa)
     ]
     
     data_header = [[logo if logo else "", datos_empresa]]
@@ -254,12 +258,25 @@ def _agregar_contenido_desglose(story, styles, cliente, plan):
     story.append(Spacer(1, 20))
     # ----------------------------------------------------------
 
-    story.append(Paragraph("<br/>DETALLE DE CUOTAS", styles['Heading2']))
-    story.append(Spacer(1, 10))
-
-    story.append(Paragraph(f"<br/><b>Cliente:</b> {cliente['nombre']}", styles['Normal']))
-    story.append(Paragraph(f"<b>DNI:</b> {cliente['dni']}", styles['Normal']))
+    estilo_titulo_desglose = ParagraphStyle('TituloDesglose', parent=styles['Heading2'], alignment=1, textColor=colors.HexColor('#2c3e50'))
+    story.append(Paragraph("DETALLE DE CUOTAS", estilo_titulo_desglose))
     story.append(Spacer(1, 15))
+
+    estilo_cliente_etiq = ParagraphStyle('CliEtiq', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'))
+    estilo_cliente_val = ParagraphStyle('CliVal', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold')
+
+    datos_cliente = [
+        [Paragraph("<b>Cliente:</b>", estilo_cliente_etiq), Paragraph(cliente['nombre'], estilo_cliente_val)],
+        [Paragraph("<b>DNI:</b>", estilo_cliente_etiq), Paragraph(cliente['dni'], estilo_cliente_val)]
+    ]
+    t_cliente = Table(datos_cliente, colWidths=[60, 350])
+    t_cliente.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_cliente)
+    story.append(Spacer(1, 20))
 
     # TABLA DE CUOTAS (Igual que antes, con la corrección de fechas)
     data = [["NRO CUOTA", "FECHA VENCIMIENTO", "MONTO"]]
@@ -281,14 +298,24 @@ def _agregar_contenido_desglose(story, styles, cliente, plan):
         ])
 
     t = Table(data, colWidths=[100, 130, 100])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+    ts = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2C3E50')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
         ('BOTTOMPADDING', (0,0), (-1,0), 8),
-    ]))
+        ('TOPPADDING', (0,0), (-1,0), 8),
+        
+        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,1), (-1,-1), 9),
+        ('BOTTOMPADDING', (0,1), (-1,-1), 6),
+        ('TOPPADDING', (0,1), (-1,-1), 6),
+        
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+    ])
+    t.setStyle(ts)
     story.append(t)
     story.append(Spacer(1, 20))
 
@@ -298,7 +325,8 @@ def _agregar_contenido_desglose(story, styles, cliente, plan):
     - EN CASO DE RETRASO, PODRÁN APLICARSE INTERESES ADICIONALES.<br/>
     - FIRMAR PAGARÉ Y CONTRATO COMPRA-VENTA.<br/>
     """
-    story.append(Paragraph(condiciones, styles['Normal']))
+    estilo_condiciones = ParagraphStyle('Condiciones', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#444444'))
+    story.append(Paragraph(condiciones, estilo_condiciones))
     story.append(Spacer(1, 30))
 
     story.append(Paragraph(f"Fecha de Emisión: {hoy.strftime('%d/%m/%Y')}", styles['Normal']))
@@ -415,20 +443,26 @@ def generar_detalle_credito_pdf(credito: dict, cuotas: list) -> str:
     ensure_dirs()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"Estado_Credito_{credito['id']}_{timestamp}.pdf"
-    filepath = DIR_COMPROBANTES / filename # Lo guardamos en comprobantes o podrías crear otra carpeta
+    filepath = DIR_COMPROBANTES / filename 
 
     doc = SimpleDocTemplate(str(filepath), pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     styles = getSampleStyleSheet()
     story = []
 
+    # --- ESTILOS MEJORADOS ---
+    estilo_titulo = ParagraphStyle('EmpTitulo', parent=styles['Title'], fontSize=16, leading=20, alignment=1)
+    estilo_sub = ParagraphStyle('EmpSub', parent=styles['Heading3'], fontSize=11, leading=14, alignment=1, textColor=colors.HexColor('#444444'))
+    estilo_norm = ParagraphStyle('EmpNorm', parent=styles['Normal'], fontSize=9, leading=12, alignment=1, textColor=colors.HexColor('#666666'))
+    
     # --- ENCABEZADO: LOGO + DATOS EMPRESA ---
     logo = _obtener_logo_flowable()
     
     datos_empresa = [
-        Paragraph("<b>EL GALPÓN</b>", styles['Title']),
-        Paragraph("ESTADO DE CUENTA / CRÉDITO", styles['Heading3']),
-        Paragraph(f"Crédito N°: {credito['id']}", styles['Normal']),
-        Paragraph(f"Fecha Venta: {credito.get('fecha_venta', '-')}", styles['Normal'])
+        Paragraph("<b>EL GALPÓN</b>", estilo_titulo),
+        Paragraph("ESTADO DE CUENTA / CRÉDITO", estilo_sub),
+        Spacer(1, 8),
+        Paragraph(f"Crédito N°: {credito['id']}", estilo_norm),
+        Paragraph(f"Fecha Venta: {credito.get('fecha_venta', '-')}", estilo_norm)
     ]
     
     data_header = [[logo if logo else "", datos_empresa]]
@@ -439,37 +473,47 @@ def generar_detalle_credito_pdf(credito: dict, cuotas: list) -> str:
         ('ALIGN', (1,0), (1,0), 'CENTER'),
     ]))
     story.append(t_header)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 30))
 
     # --- DATOS CLIENTE ---
-    story.append(Paragraph(f"<b>Cliente:</b> {credito['nombre']}", styles['Normal']))
-    story.append(Paragraph(f"<b>DNI:</b> {credito['dni']}", styles['Normal']))
-    story.append(Spacer(1, 15))
+    estilo_cliente_etiq = ParagraphStyle('CliEtiq', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'))
+    estilo_cliente_val = ParagraphStyle('CliVal', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold')
+
+    datos_cliente = [
+        [Paragraph("<b>Cliente:</b>", estilo_cliente_etiq), Paragraph(credito['nombre'], estilo_cliente_val)],
+        [Paragraph("<b>DNI:</b>", estilo_cliente_etiq), Paragraph(credito['dni'], estilo_cliente_val)]
+    ]
+    t_cliente = Table(datos_cliente, colWidths=[60, 350])
+    t_cliente.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_cliente)
+    story.append(Spacer(1, 20))
 
     # --- TABLA DE CUOTAS (Desde la BD) ---
-    # Columnas: Cuota | Vencimiento | Monto | Estado
     data = [["CUOTA", "VENCIMIENTO", "MONTO", "ESTADO"]]
+    extra_styles = []
     
-    for c in cuotas:
-        # Formateo de estado
+    for idx, c in enumerate(cuotas):
+        row_idx = idx + 1
         estado = c['estado']
         if estado == 'PAGADO':
             estado_fmt = f"PAGADO ({c.get('fecha_pago', '')})"
-            color_text = colors.green
-        elif estado == 'MORA': # Si usas este estado
+            color_text = colors.HexColor('#27ae60')
+        elif estado == 'MORA':
             estado_fmt = "VENCIDA / IMPAGA"
-            color_text = colors.red
+            color_text = colors.HexColor('#e74c3c')
         else:
-            # Verificamos vencimiento manual si sigue como Pendiente
             hoy_str = datetime.now().strftime("%Y-%m-%d")
             if c['fecha_vencimiento'] < hoy_str and estado == 'PENDIENTE':
                 estado_fmt = "VENCIDA"
-                color_text = colors.red
+                color_text = colors.HexColor('#e74c3c')
             else:
                 estado_fmt = "A VENCER"
-                color_text = colors.black
+                color_text = colors.HexColor('#333333')
 
-        # Formateo de fecha (YYYY-MM-DD a DD/MM/YYYY)
         try:
             fecha_obj = datetime.strptime(c['fecha_vencimiento'], '%Y-%m-%d')
             fecha_fmt = fecha_obj.strftime("%d/%m/%Y")
@@ -483,31 +527,43 @@ def generar_detalle_credito_pdf(credito: dict, cuotas: list) -> str:
             estado_fmt
         ]
         data.append(row)
+        
+        extra_styles.append(('TEXTCOLOR', (3, row_idx), (3, row_idx), color_text))
+        extra_styles.append(('FONTNAME', (3, row_idx), (3, row_idx), 'Helvetica-Bold'))
 
     # Estilos de tabla
     t = Table(data, colWidths=[60, 100, 100, 150])
     ts = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2C3E50')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
         ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('TOPPADDING', (0,0), (-1,0), 8),
+        
+        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,1), (-1,-1), 9),
+        ('BOTTOMPADDING', (0,1), (-1,-1), 6),
+        ('TOPPADDING', (0,1), (-1,-1), 6),
+        
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
     ])
     
-    # Colorear filas según estado (opcional, avanzado)
-    # Aquí lo dejamos simple, pero podríamos iterar para pintar textos específicos
-    
+    for es in extra_styles:
+        ts.add(es[0], es[1], es[2], es[3])
+        
     t.setStyle(ts)
     story.append(t)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 30))
 
     # --- PIE DE PÁGINA ---
     pie = """
     Documento emitido para control interno y seguimiento del cliente.<br/>
     El Galpón - Colchonería y Blanquería
     """
-    estilo_pie = ParagraphStyle('Pie', parent=styles['Normal'], alignment=1)
+    estilo_pie = ParagraphStyle('Pie', parent=styles['Normal'], alignment=1, fontSize=8, textColor=colors.grey)
     story.append(Paragraph(pie, estilo_pie))
 
     doc.build(story)
