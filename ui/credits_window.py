@@ -66,15 +66,24 @@ class CreditDetailDialog(QDialog):
         layout.addWidget(QLabel("<hr>"))
         
         # --- SECCIÓN 3: RESUMEN FINANCIERO ---
-        layout.addWidget(QLabel("<b>💰 PLAN DE PAGOS</b>"))
-        info_financiera = (
-            f"<b>Monto Total Financiado:</b> {format_currency(self.credito['monto_financiado'])}<br>"
-            f"<b>Plan:</b> {self.credito['cantidad_cuotas']} Cuotas"
-        )
-        lbl_fin = QLabel(info_financiera)
-        lbl_fin.setTextFormat(Qt.RichText)
-        layout.addWidget(lbl_fin)
+        layout.addWidget(QLabel("<b>💰 RESUMEN FINANCIERO Y RECUPERO</b>"))
         
+        self.lbl_desglose = QLabel()
+        self.lbl_desglose.setTextFormat(Qt.RichText)
+        self.lbl_desglose.setStyleSheet("font-size: 12px;")
+        layout.addWidget(self.lbl_desglose)
+        
+        from PySide6.QtWidgets import QProgressBar
+        self.pb_recupero = QProgressBar()
+        self.pb_recupero.setFixedHeight(22)
+        layout.addWidget(self.pb_recupero)
+        
+        self.lbl_estado_recupero = QLabel()
+        layout.addWidget(self.lbl_estado_recupero)
+        
+        self._actualizar_resumen()
+        
+        layout.addWidget(QLabel("<hr>"))
         layout.addWidget(QLabel("<b>Estado de Cuotas (Doble click para cobrar/anular):</b>"))
 
         # Lista de Cuotas
@@ -118,6 +127,39 @@ class CreditDetailDialog(QDialog):
         botones_layout.addWidget(btn_cerrar)
         
         layout.addLayout(botones_layout)
+
+    def _actualizar_resumen(self):
+        monto_financiado = self.credito.get('monto_financiado', 0)
+        monto_efectivo = self.credito.get('monto_base', 0)
+        costo_real = monto_efectivo / 1.44
+        pagado = sum(c['monto'] for c in self.cuotas if c['estado'] == 'PAGADO')
+        
+        info = (
+            f"<b>Costo:</b> {format_currency(costo_real)}<br>"
+            f"<b>Valor Efectivo:</b> {format_currency(monto_efectivo)}<br>"
+            f"<b>Total Financiado:</b> {format_currency(monto_financiado)}<br>"
+            f"<b>Total Ingresado:</b> <span style='color:green'><b>{format_currency(pagado)}</b></span><br>"
+            f"<b>Plan:</b> {self.credito['cantidad_cuotas']} Cuotas"
+        )
+        self.lbl_desglose.setText(info)
+        
+        if costo_real > 0:
+            self.pb_recupero.setMaximum(int(costo_real))
+            self.pb_recupero.setValue(int(min(pagado, costo_real)))
+            self.pb_recupero.setFormat(f"Cobrado: {format_currency(pagado)} / {format_currency(costo_real)}")
+            
+            if pagado >= costo_real:
+                self.pb_recupero.setStyleSheet("QProgressBar::chunk { background-color: #27ae60; }") 
+                self.lbl_estado_recupero.setText("✅ ¡Costo de la mercadería recuperado!")
+                self.lbl_estado_recupero.setStyleSheet("color: #27ae60; font-weight: bold; font-size: 13px;")
+            else:
+                self.pb_recupero.setStyleSheet("QProgressBar::chunk { background-color: #e67e22; }") 
+                faltante = costo_real - pagado
+                self.lbl_estado_recupero.setText(f"⚠️ Falta cobrar {format_currency(faltante)} para recuperar el costo del producto.")
+                self.lbl_estado_recupero.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 12px;")
+        else:
+            self.pb_recupero.hide()
+            self.lbl_estado_recupero.hide()
 
     def imprimir_detalle(self):
             try:
@@ -165,6 +207,11 @@ class CreditDetailDialog(QDialog):
                 if advertencia == QMessageBox.Yes:
                     anular_pago(cuota_id)
                     
+                    for c in self.cuotas:
+                        if c['id'] == cuota_id:
+                            c['estado'] = 'PENDIENTE'
+                    self._actualizar_resumen()
+                    
                     # Actualizar visualmente
                     texto_limpio = texto_item.replace("✅ ", "").split(" (Pagado")[0]
                     item.setText(f"⏳ {texto_limpio}")
@@ -184,6 +231,11 @@ class CreditDetailDialog(QDialog):
                 
                 if confirm == QMessageBox.Yes:
                     pagar_cuota(cuota_id)
+                    
+                    for c in self.cuotas:
+                        if c['id'] == cuota_id:
+                            c['estado'] = 'PAGADO'
+                    self._actualizar_resumen()
                     
                     # Actualizar visualmente
                     texto_limpio = texto_item.replace("⏳ ", "").replace("⚠️ ", "").replace(" [VENCIDA]", "")
