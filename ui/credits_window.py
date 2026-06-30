@@ -143,19 +143,19 @@ class CreditDetailDialog(QDialog):
         )
         self.lbl_desglose.setText(info)
         
-        if costo_real > 0:
-            self.pb_recupero.setMaximum(int(costo_real))
-            self.pb_recupero.setValue(int(min(pagado, costo_real)))
-            self.pb_recupero.setFormat(f"Cobrado: {format_currency(pagado)} / {format_currency(costo_real)}")
+        if monto_efectivo > 0:
+            self.pb_recupero.setMaximum(int(monto_efectivo))
+            self.pb_recupero.setValue(int(min(pagado, monto_efectivo)))
+            self.pb_recupero.setFormat(f"Cobrado: {format_currency(pagado)} / {format_currency(monto_efectivo)}")
             
-            if pagado >= costo_real:
+            if pagado >= monto_efectivo:
                 self.pb_recupero.setStyleSheet("QProgressBar::chunk { background-color: #27ae60; }") 
-                self.lbl_estado_recupero.setText("✅ ¡Costo de la mercadería recuperado!")
+                self.lbl_estado_recupero.setText("✅ ¡Valor en Efectivo alcanzado!")
                 self.lbl_estado_recupero.setStyleSheet("color: #27ae60; font-weight: bold; font-size: 13px;")
             else:
                 self.pb_recupero.setStyleSheet("QProgressBar::chunk { background-color: #e67e22; }") 
-                faltante = costo_real - pagado
-                self.lbl_estado_recupero.setText(f"⚠️ Falta cobrar {format_currency(faltante)} para recuperar el costo del producto.")
+                faltante = monto_efectivo - pagado
+                self.lbl_estado_recupero.setText(f"⚠️ Falta cobrar {format_currency(faltante)} para igualar el precio en Efectivo.")
                 self.lbl_estado_recupero.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 12px;")
         else:
             self.pb_recupero.hide()
