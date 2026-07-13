@@ -3,9 +3,15 @@ import math
 from num2words import num2words
 from logic.constants import TASA_INTERES_MENSUAL
 
-def format_currency(valor: float) -> str:
+def format_currency(valor) -> str:
     """Formatea moneda estilo Argentina ($1.000)"""
-    return f"${valor:,.0f}".replace(",", ".")
+    try:
+        v = float(valor)
+        if math.isnan(v):
+            return ""
+        return f"${v:,.0f}".replace(",", ".")
+    except (ValueError, TypeError):
+        return ""
 
 def numero_a_letras(numero: float) -> str:
     """Convierte un número a texto (ej: 150 -> CIENTO CINCUENTA)."""
@@ -143,9 +149,15 @@ def calcular_plan_cuotas(precio_base: float, num_cuotas: int) -> dict:
         "tasa_aplicada": tasa_interes_total
     }
 
-def format_currency(valor: float) -> str:
+def format_currency(valor) -> str:
     """Formatea moneda estilo Argentina ($1.000)"""
-    return f"${valor:,.0f}".replace(",", ".")
+    try:
+        v = float(valor)
+        if math.isnan(v):
+            return ""
+        return f"${v:,.0f}".replace(",", ".")
+    except (ValueError, TypeError):
+        return ""
 
 def generar_texto_clipboard(data_fila: dict, plan_info: dict, mapeo_campos: list) -> str:
     """Genera el texto plano para copiar al portapapeles."""

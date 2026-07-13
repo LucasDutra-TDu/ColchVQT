@@ -258,7 +258,7 @@ class StockManagerDialog(QDialog):
     def __init__(self, parent, sheets_data: dict, menu_config: dict):
         super().__init__(parent)
         self.setWindowTitle("📦 Carrito de Ingreso de Mercadería")
-        self.resize(950, 650)
+        self.resize(1350, 700)
         
         self.sheets_data = sheets_data
         self.menu_config = menu_config
@@ -287,16 +287,17 @@ class StockManagerDialog(QDialog):
         panel_izq.addWidget(self.chk_sin_stock)
         
         self.txt_buscar = QLineEdit()
-        self.txt_buscar.setPlaceholderText("🔍 Filtrar modelo dentro de la categoría...")
+        self.txt_buscar.setPlaceholderText("🔍 Filtrar por código o modelo...")
         self.txt_buscar.setStyleSheet("font-size: 14px; padding: 5px;")
         # Ahora el texto también llama al método unificado
         self.txt_buscar.textChanged.connect(self.aplicar_filtros) 
         panel_izq.addWidget(self.txt_buscar)
 
         self.tabla_busqueda = QTableWidget()
-        self.tabla_busqueda.setColumnCount(4)
-        self.tabla_busqueda.setHorizontalHeaderLabels(["Código", "Modelo", "Stock Actual", "Acción"])
+        self.tabla_busqueda.setColumnCount(6)
+        self.tabla_busqueda.setHorizontalHeaderLabels(["Código", "Modelo", "Características", "Medida", "Stock", "Acción"])
         self.tabla_busqueda.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.tabla_busqueda.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tabla_busqueda.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla_busqueda.setEditTriggers(QTableWidget.NoEditTriggers)
         panel_izq.addWidget(self.tabla_busqueda)
@@ -379,9 +380,19 @@ class StockManagerDialog(QDialog):
             
         # 2. Aplicamos Filtro de Texto
         texto = self.txt_buscar.text().lower()
-        if texto and 'MODELO' in df_filtrado.columns:
-            mask = df_filtrado['MODELO'].astype(str).str.lower().str.contains(texto, na=False)
-            df_filtrado = df_filtrado[mask]
+        if texto:
+            col_codigo = 'CÓDIGO' if 'CÓDIGO' in df_filtrado.columns else 'CODIGO'
+            mask = None
+            
+            if 'MODELO' in df_filtrado.columns:
+                mask = df_filtrado['MODELO'].astype(str).str.lower().str.contains(texto, na=False)
+                
+            if col_codigo in df_filtrado.columns:
+                m_cod = df_filtrado[col_codigo].astype(str).str.lower().str.contains(texto, na=False)
+                mask = m_cod if mask is None else (mask | m_cod)
+                
+            if mask is not None:
+                df_filtrado = df_filtrado[mask]
             
         self.popular_tabla(df_filtrado)
 
@@ -401,10 +412,18 @@ class StockManagerDialog(QDialog):
             if codigo.endswith('.0'): codigo = codigo[:-2] 
                 
             modelo = str(fila.get('MODELO', 'Sin Nombre'))
+            caracteristicas = str(fila.get('CARACTERISTICAS', ''))
+            medida = str(fila.get('MEDIDA (LARG-ANCH-ESP)', fila.get('MEDIDA', '')))
+            
+            if caracteristicas == 'nan': caracteristicas = ''
+            if medida == 'nan': medida = ''
+            
             stock_act = str(fila.get('STOCK_ACTUAL', '0'))
 
             self.tabla_busqueda.setItem(row_idx, 0, QTableWidgetItem(codigo))
             self.tabla_busqueda.setItem(row_idx, 1, QTableWidgetItem(modelo))
+            self.tabla_busqueda.setItem(row_idx, 2, QTableWidgetItem(caracteristicas))
+            self.tabla_busqueda.setItem(row_idx, 3, QTableWidgetItem(medida))
             
             item_stock = QTableWidgetItem(stock_act)
             item_stock.setTextAlignment(Qt.AlignCenter)
@@ -412,12 +431,12 @@ class StockManagerDialog(QDialog):
             if stock_act == '0':
                 item_stock.setForeground(Qt.red)
                 
-            self.tabla_busqueda.setItem(row_idx, 2, item_stock)
+            self.tabla_busqueda.setItem(row_idx, 4, item_stock)
 
             btn_add = QPushButton("➕ Agregar")
             btn_add.setStyleSheet("background-color: #3498db; color: white; border-radius: 3px;")
             btn_add.clicked.connect(lambda checked, c=codigo, m=modelo: self.solicitar_cantidad(c, m))
-            self.tabla_busqueda.setCellWidget(row_idx, 3, btn_add)
+            self.tabla_busqueda.setCellWidget(row_idx, 5, btn_add)
 
     def solicitar_cantidad(self, codigo, modelo):
         if codigo == "S/C":
