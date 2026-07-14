@@ -466,7 +466,7 @@ def build_busqueda_view(parent_window: QWidget, on_buscar: Callable, volver_call
     layout = QVBoxLayout(vista)
 
     input_busqueda = QLineEdit()
-    input_busqueda.setPlaceholderText("Ingrese el MODELO del producto...")
+    input_busqueda.setPlaceholderText("Ingrese el MODELO / CODIGO del producto...")
     layout.addWidget(input_busqueda)
 
     btn_buscar = QPushButton("Buscar")
