@@ -258,7 +258,8 @@ class StockManagerDialog(QDialog):
     def __init__(self, parent, sheets_data: dict, menu_config: dict):
         super().__init__(parent)
         self.setWindowTitle("📦 Carrito de Ingreso de Mercadería")
-        self.resize(1350, 700)
+        self.resize(1280, 680)
+        self.showMaximized()
         
         self.sheets_data = sheets_data
         self.menu_config = menu_config
@@ -294,10 +295,10 @@ class StockManagerDialog(QDialog):
         panel_izq.addWidget(self.txt_buscar)
 
         self.tabla_busqueda = QTableWidget()
-        self.tabla_busqueda.setColumnCount(6)
-        self.tabla_busqueda.setHorizontalHeaderLabels(["Código", "Modelo", "Características", "Medida", "Stock", "Acción"])
-        self.tabla_busqueda.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.tabla_busqueda.setColumnCount(7)
+        self.tabla_busqueda.setHorizontalHeaderLabels(["Código", "Proveedor", "Modelo", "Características", "Medida", "Stock", "Acción"])
         self.tabla_busqueda.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tabla_busqueda.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.tabla_busqueda.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabla_busqueda.setEditTriggers(QTableWidget.NoEditTriggers)
         panel_izq.addWidget(self.tabla_busqueda)
@@ -410,6 +411,9 @@ class StockManagerDialog(QDialog):
             
             codigo = str(fila.get(col_codigo, 'S/C')).strip()
             if codigo.endswith('.0'): codigo = codigo[:-2] 
+            
+            proveedor = str(fila.get('PROVEEDOR', ''))
+            if proveedor == 'nan': proveedor = ''
                 
             modelo = str(fila.get('MODELO', 'Sin Nombre'))
             caracteristicas = str(fila.get('CARACTERISTICAS', ''))
@@ -421,9 +425,10 @@ class StockManagerDialog(QDialog):
             stock_act = str(fila.get('STOCK_ACTUAL', '0'))
 
             self.tabla_busqueda.setItem(row_idx, 0, QTableWidgetItem(codigo))
-            self.tabla_busqueda.setItem(row_idx, 1, QTableWidgetItem(modelo))
-            self.tabla_busqueda.setItem(row_idx, 2, QTableWidgetItem(caracteristicas))
-            self.tabla_busqueda.setItem(row_idx, 3, QTableWidgetItem(medida))
+            self.tabla_busqueda.setItem(row_idx, 1, QTableWidgetItem(proveedor))
+            self.tabla_busqueda.setItem(row_idx, 2, QTableWidgetItem(modelo))
+            self.tabla_busqueda.setItem(row_idx, 3, QTableWidgetItem(caracteristicas))
+            self.tabla_busqueda.setItem(row_idx, 4, QTableWidgetItem(medida))
             
             item_stock = QTableWidgetItem(stock_act)
             item_stock.setTextAlignment(Qt.AlignCenter)
@@ -431,12 +436,12 @@ class StockManagerDialog(QDialog):
             if stock_act == '0':
                 item_stock.setForeground(Qt.red)
                 
-            self.tabla_busqueda.setItem(row_idx, 4, item_stock)
+            self.tabla_busqueda.setItem(row_idx, 5, item_stock)
 
             btn_add = QPushButton("➕ Agregar")
             btn_add.setStyleSheet("background-color: #3498db; color: white; border-radius: 3px;")
             btn_add.clicked.connect(lambda checked, c=codigo, m=modelo: self.solicitar_cantidad(c, m))
-            self.tabla_busqueda.setCellWidget(row_idx, 5, btn_add)
+            self.tabla_busqueda.setCellWidget(row_idx, 6, btn_add)
 
     def solicitar_cantidad(self, codigo, modelo):
         if codigo == "S/C":

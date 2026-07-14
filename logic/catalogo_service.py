@@ -61,10 +61,18 @@ def buscar_producto_por_modelo(sheets: Dict[str, pd.DataFrame], termino: str) ->
         print(f"[ERROR] Fallo al concatenar hojas para búsqueda: {e}")
         return pd.DataFrame()
 
-    if 'MODELO' not in df_completo.columns:
+    mask = None
+    if 'MODELO' in df_completo.columns:
+        mask = df_completo['MODELO'].astype(str).str.contains(termino, case=False, na=False)
+        
+    col_codigo = 'CÓDIGO' if 'CÓDIGO' in df_completo.columns else 'CODIGO'
+    if col_codigo in df_completo.columns:
+        m_cod = df_completo[col_codigo].astype(str).str.contains(termino, case=False, na=False)
+        mask = m_cod if mask is None else (mask | m_cod)
+        
+    if mask is None:
         return pd.DataFrame()
 
-    mask = df_completo['MODELO'].astype(str).str.contains(termino, case=False, na=False)
     return df_completo[mask]
 
 def formatear_producto_para_clipboard(row: dict) -> str:
