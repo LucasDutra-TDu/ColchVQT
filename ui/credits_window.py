@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QFont
 from PySide6.QtCore import Qt, QDate
 
-from logic.credits_service import obtener_creditos_activos, obtener_detalle_credito, pagar_cuota, anular_pago
+from logic.credits_service import obtener_creditos_activos, obtener_detalle_credito, pagar_cuota, anular_pago, obtener_creditos_finalizados
 from logic.financiero import format_currency
 from datetime import datetime
 
@@ -251,6 +251,45 @@ class CreditDetailDialog(QDialog):
             # Liberamos el bloqueo siempre, pase lo que pase
             self._procesando = False
 
+class HistorialCreditosDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("📜 Historial de Créditos Finalizados")
+        self.resize(800, 500)
+        
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("<h2>Créditos Finalizados (Cancelados en su totalidad)</h2>"))
+        
+        self.table = QTableView()
+        self.model = QStandardItemModel()
+        self.model.setHorizontalHeaderLabels(["Cliente", "DNI", "Fecha Otorgamiento", "Monto Total", "ID Oculto"])
+        self.table.setModel(self.model)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.setEditTriggers(QTableView.NoEditTriggers)
+        self.table.setColumnHidden(4, True)
+        self.table.doubleClicked.connect(self.abrir_detalle)
+        
+        layout.addWidget(self.table)
+        self.cargar_datos()
+        
+    def cargar_datos(self):
+        creditos = obtener_creditos_finalizados()
+        
+        for cr in creditos:
+            i_cliente = QStandardItem(cr['nombre'])
+            i_dni = QStandardItem(cr['dni'])
+            i_fecha = QStandardItem(cr.get('fecha_otorgamiento', '')[:10])
+            i_monto = QStandardItem(format_currency(cr['monto_financiado']))
+            i_id = QStandardItem(str(cr['id']))
+            
+            self.model.appendRow([i_cliente, i_dni, i_fecha, i_monto, i_id])
+            
+    def abrir_detalle(self, index):
+        row = index.row()
+        credito_id = int(self.model.item(row, 4).text())
+        dialog = CreditDetailDialog(credito_id, self)
+        dialog.exec()
+
 class CreditsWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -262,10 +301,21 @@ class CreditsWindow(QMainWindow):
         layout = QVBoxLayout(central)
         
         # Header
-        layout.addWidget(QLabel("<h2>Listado de Créditos Activos</h2>"))
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel("<h2>Listado de Créditos Activos</h2>"))
+        
+        header_layout.addStretch()
+        
+        btn_historial = QPushButton("📜 Historial Finalizados")
+        btn_historial.setStyleSheet("background-color: #7f8c8d; color: white; padding: 5px;")
+        btn_historial.clicked.connect(self.abrir_historial)
+        header_layout.addWidget(btn_historial)
+        
         btn_refresh = QPushButton("🔄 Actualizar Lista")
         btn_refresh.clicked.connect(self.cargar_datos)
-        layout.addWidget(btn_refresh)
+        header_layout.addWidget(btn_refresh)
+        
+        layout.addLayout(header_layout)
         
         # Tabla
         self.table = QTableView()
@@ -280,6 +330,10 @@ class CreditsWindow(QMainWindow):
         layout.addWidget(self.table)
         
         self.cargar_datos()
+
+    def abrir_historial(self):
+        dialog = HistorialCreditosDialog(self)
+        dialog.exec()
 
     def cargar_datos(self):
         self.model.removeRows(0, self.model.rowCount())

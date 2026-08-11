@@ -152,6 +152,19 @@ def obtener_creditos_activos() -> list:
         rows = con.execute(sql).fetchall()
     return [dict(r) for r in rows]
 
+def obtener_creditos_finalizados() -> list:
+    with _get_connection() as con:
+        sql = """
+            SELECT cr.*, cl.nombre, cl.dni 
+            FROM creditos cr
+            JOIN clientes cl ON cr.cliente_id = cl.id
+            WHERE cr.estado = 'FINALIZADO'
+            ORDER BY cr.fecha_otorgamiento DESC
+        """
+        rows = con.execute(sql).fetchall()
+    return [dict(r) for r in rows]
+
+
 def obtener_detalle_credito(credito_id: int) -> dict:
     """Devuelve info del crédito, cliente, productos y cuotas."""
     with _get_connection() as con:
