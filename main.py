@@ -8,6 +8,8 @@ from logic.cart_service import CartService
 
 # Comando PyInstaller
 # pyinstaller --onedir --windowed --icon="elgalpon.ico" --name="Colchoneria Gestion x.x" main.py
+# & "C:\Users\lucas\AppData\Local\Python\pythoncore-3.14-64\python.exe" -m PyInstaller --onedir --windowed --icon="elgalpon.ico" --name="Colchoneria Gestion x.x" main.py
+
 
 def show_critical_error(title: str, message: str):
     """Helper para mostrar errores críticos antes de que exista la ventana principal."""

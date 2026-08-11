@@ -147,8 +147,8 @@ MENU_CONFIG = {
         "tipo_producto": "otros",
         "tipo": "categoria",
         "hojas": [
-            "ACOLCHADOS", "ALFOMBRAS DE BAÑO", "AROMATIZADORES", "BATAS DE BAÑO",
-            "CESTOS PARA ROPA", "FRAZADAS", "MUEBLES", "TOALLAS", "SABANAS", "RESPALDOS"
+            "ACOLCHADOS", "ACCESORIOS PARA BAÑO", "AROMATIZADORES", "BATAS DE BAÑO",
+            "CESTOS PARA ROPA", "COCINA", "CORTINAS Y ALFOMBRAS", "FRAZADAS", "MUEBLES", "TOALLAS", "SABANAS", "RESPALDOS"
         ]
     },
     "busqueda": {
