@@ -92,7 +92,8 @@ def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
             msg_box.setTextFormat(Qt.RichText)
             msg_box.setText(texto_html)
             
-            btn_copiar = msg_box.addButton("Copiar Plan", QMessageBox.ActionRole)
+            btn_copiar = msg_box.addButton("Copiar Plan (Texto)", QMessageBox.ActionRole)
+            btn_flyer = msg_box.addButton("Generar Flyer", QMessageBox.ActionRole)
             msg_box.addButton("Cerrar", QMessageBox.RejectRole)
             msg_box.setDefaultButton(btn_copiar)
             
@@ -103,6 +104,19 @@ def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
                 # Usamos MAPEO_CLIPBOARD global del archivo views.py
                 texto_plano = generar_texto_clipboard(fila_data, plan, MAPEO_CLIPBOARD)
                 QApplication.clipboard().setText(texto_plano)
+            elif msg_box.clickedButton() == btn_flyer:
+                from logic.image_service import generar_flyer_producto, obtener_ruta_imagen
+                ruta_img = obtener_ruta_imagen(fila_data)
+                if not ruta_img:
+                    QMessageBox.warning(parent, "Sin Imagen", "El producto no tiene imagen para generar el flyer.")
+                else:
+                    try:
+                        img_io = generar_flyer_producto(fila_data, ruta_img, plan_credito=plan)
+                        image = QImage.fromData(img_io.getvalue())
+                        QApplication.clipboard().setImage(image)
+                        QMessageBox.information(parent, "Éxito", "¡Flyer del plan copiado al portapapeles!")
+                    except Exception as e:
+                        QMessageBox.critical(parent, "Error", f"Fallo al generar el flyer:\n{e}")
 
         except Exception as e:
             import traceback
@@ -274,6 +288,12 @@ def build_tabla_productos(parent_window, df, campos, copiar_callback, ver_imagen
             # Jerarquía Tipográfica
             if campo == "MODELO":
                 estilo_celda = ESTILOS.get("celda_modelo", "")
+            elif campo in ["CÓDIGO", "CODIGO"]:
+                texto_celda = str(valor_raw).strip()
+                if texto_celda.endswith(".0"):
+                    texto_celda = texto_celda[:-2]
+                if texto_celda == "nan": texto_celda = ""
+                estilo_celda = ESTILOS.get("celda_texto", "")
             elif campo == "EFECTIVO/TRANSF":
                 if isinstance(valor_raw, (int, float)):
                     texto_celda = format_currency(valor_raw)

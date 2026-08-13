@@ -81,7 +81,7 @@ def draw_text_wrapped(draw, text, x, y, font, max_width, fill):
     return current_y
 
 
-def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None) -> io.BytesIO:
+def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None, plan_credito: dict = None) -> io.BytesIO:
     """
     Genera un flyer visual combinando foto del producto, logo de la empresa y texto completo.
     """
@@ -221,22 +221,37 @@ def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None)
     draw.line([text_x, current_y, canvas_width-50, current_y], fill="lightgray", width=2)
     current_y += 40
 
-    precio_efectivo = row.get('EFECTIVO/TRANSF')
-    if pd.notna(precio_efectivo) and str(precio_efectivo).strip() not in ['', '-', 'None']:
-        if isinstance(precio_efectivo, (int, float)):
-            precio_efectivo = format_currency(precio_efectivo)
-        draw.text((text_x, current_y), "Efectivo/Transf:", font=font_main, fill=text_color)
-        current_y += 35
-        draw.text((text_x, current_y), f"{precio_efectivo}", font=font_price, fill=(39, 174, 96))
-        current_y += 60
+    if plan_credito:
+        draw.text((text_x, current_y), "CRÉDITO DE LA CASA:", font=font_main, fill=text_color)
+        current_y += 40
+        
+        num_cuotas = plan_credito['num_cuotas']
+        valor_cuota = plan_credito['valor_cuota']
+        precio_final = plan_credito['precio_final']
+        
+        draw.text((text_x, current_y), f"{num_cuotas} Cuotas fijas de:", font=font_main, fill=text_color)
+        current_y += 40
+        draw.text((text_x, current_y), f"{format_currency(valor_cuota)}", font=font_price, fill=(39, 174, 96))
+        current_y += 50
+        
+        draw.text((text_x, current_y), f"Total: {format_currency(precio_final)}", font=font_main, fill=text_color)
+    else:
+        precio_efectivo = row.get('EFECTIVO/TRANSF')
+        if pd.notna(precio_efectivo) and str(precio_efectivo).strip() not in ['', '-', 'None']:
+            if isinstance(precio_efectivo, (int, float)):
+                precio_efectivo = format_currency(precio_efectivo)
+            draw.text((text_x, current_y), "Efectivo/Transf:", font=font_main, fill=text_color)
+            current_y += 35
+            draw.text((text_x, current_y), f"{precio_efectivo}", font=font_price, fill=(39, 174, 96))
+            current_y += 60
 
-    precio_tarjeta = row.get('DEBIT/CREDIT', row.get('LISTA/TARJETA'))
-    if pd.notna(precio_tarjeta) and str(precio_tarjeta).strip() not in ['', '-', 'None']:
-        if isinstance(precio_tarjeta, (int, float)):
-            precio_tarjeta = format_currency(precio_tarjeta)
-        draw.text((text_x, current_y), "Lista/Tarjeta:", font=font_main, fill=text_color)
-        current_y += 35
-        draw.text((text_x, current_y), f"{precio_tarjeta}", font=font_price, fill=text_color)
+        precio_tarjeta = row.get('DEBIT/CREDIT', row.get('LISTA/TARJETA'))
+        if pd.notna(precio_tarjeta) and str(precio_tarjeta).strip() not in ['', '-', 'None']:
+            if isinstance(precio_tarjeta, (int, float)):
+                precio_tarjeta = format_currency(precio_tarjeta)
+            draw.text((text_x, current_y), "Lista/Tarjeta:", font=font_main, fill=text_color)
+            current_y += 35
+            draw.text((text_x, current_y), f"{precio_tarjeta}", font=font_price, fill=text_color)
 
     # 4. Exportar a Bytes (Final)
     img_io = io.BytesIO()
