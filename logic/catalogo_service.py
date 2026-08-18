@@ -120,7 +120,8 @@ def formatear_producto_para_clipboard(row: dict) -> str:
     # 2. Precios y Financiación
     cols_precios = [
         ('EFECTIVO/TRANSF', '💵 Efectivo/Transf'),
-        ('DEBIT/CREDIT', '💳 Lista/Tarjeta')
+        ('DEBIT/CREDIT', '💳 Lista/Tarjeta'),
+        ('6 CUOTAS', '💳 6 Cuotas')
     ]
 
     for key_col, etiqueta in cols_precios:

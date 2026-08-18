@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Sistema de Gestión - ColchVQT")
         self.resize(1380, 800)
+        self.showMaximized()
 
         # --- Toolbar Superior --- 
         toolbar = QToolBar("Barra Principal")

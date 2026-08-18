@@ -174,6 +174,11 @@ class CartWindow(QWidget):
                 # O mejor: El precio final financiado unitario
                 precio_unitario = plan_item['precio_final'] # Esto ya incluye interés y redondeo
             
+            elif "6 Cuotas" in metodo_actual:
+                 precio_unitario = float(item.get("6 CUOTAS", 0))
+                 if precio_unitario == 0:
+                     precio_unitario = p_base
+
             elif "Tarjeta" in metodo_actual:
                  # Intentamos buscar columna específica de tarjeta
                  precio_unitario = float(item.get("DEBIT/CREDIT", 0))
@@ -236,6 +241,14 @@ class CartWindow(QWidget):
             
             texto_total = f"Total Financiado: {format_currency(total_final)} ({cuotas} x {format_currency(v_cuota)})"
         
+        elif "6 Cuotas" in metodo:
+             total_seis = sum(float(i.get("6 CUOTAS", 0)) * i.get("cantidad", 1) for i in items)
+             if total_seis == 0:
+                 total_seis = total_base
+
+             texto_total = f"Total 6 Cuotas Fijas: {format_currency(total_seis)}"
+             self.plan_credito_actual = None
+
         elif "Tarjeta" in metodo:
              # "DEBIT/CREDIT"
              total_tarjeta = sum(float(i.get("DEBIT/CREDIT", 0)) * i.get("cantidad", 1) for i in items)

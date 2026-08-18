@@ -71,7 +71,7 @@ def calcular_comisiones(metodo_pago: str, base_capital: float, monto_total: floa
         distribucion["vendedor"] = (base_capital * 0.03) + (interes * 0.08)
         distribucion["empresa"] = monto_total - (distribucion["gerente"] + distribucion["vendedor"])
 
-    elif "tarjeta" in metodo or "debito" in metodo or "débito" in metodo:
+    elif "tarjeta" in metodo or "debito" in metodo or "débito" in metodo or "cuotas" in metodo:
         # Lógica Tarjeta (Comisión SOLO sobre la base, el recargo no comisiona)
         base = base_capital
         distribucion["gerente"] = base * 0.04

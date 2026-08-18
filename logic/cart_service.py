@@ -89,7 +89,13 @@ class CartService(QObject):
         """Determina el precio unitario según el método seleccionado."""
         metodo = self._metodo_pago_actual
         
-        if "Tarjeta" in metodo or "Debito" in metodo:
+        if "6 Cuotas" in metodo:
+            col_seis = next((k for k in item.keys() if "6 CUOTAS" in k.upper()), None)
+            if col_seis:
+                return float(item.get(col_seis, p_base))
+            return p_base
+
+        elif "Tarjeta" in metodo or "Debito" in metodo:
             # Buscamos columna de tarjeta
             col_tarjeta = next((k for k in item.keys() if "DEBIT" in k.upper() or "CREDIT" in k.upper() or "TARJETA" in k.upper()), None)
             if col_tarjeta:

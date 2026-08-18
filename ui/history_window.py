@@ -66,7 +66,7 @@ class DetalleFacturaDialog(QDialog):
             lbl_gastos.setStyleSheet("color: #c0392b; font-weight: bold;")
             
             etiqueta_gasto = "Interés / Recargo:"
-            if "Tarjeta" in factura['metodo_pago'] or "Debito" in factura['metodo_pago']:
+            if "Tarjeta" in factura['metodo_pago'] or "Debito" in factura['metodo_pago'] or "6 Cuotas" in factura['metodo_pago']:
                 etiqueta_gasto = "Gastos Bancarios / Tarjeta:"
             elif "Crédito" in factura['metodo_pago']:
                 etiqueta_gasto = "Interés Financiación:"

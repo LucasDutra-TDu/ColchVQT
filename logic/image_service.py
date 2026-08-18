@@ -245,6 +245,15 @@ def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None,
             draw.text((text_x, current_y), f"{precio_efectivo}", font=font_price, fill=(39, 174, 96))
             current_y += 60
 
+        precio_seis_cuotas = row.get('6 CUOTAS')
+        if pd.notna(precio_seis_cuotas) and str(precio_seis_cuotas).strip() not in ['', '-', 'None']:
+            if isinstance(precio_seis_cuotas, (int, float)):
+                precio_seis_cuotas = format_currency(precio_seis_cuotas)
+            draw.text((text_x, current_y), "6 Cuotas Fijas:", font=font_main, fill=text_color)
+            current_y += 35
+            draw.text((text_x, current_y), f"{precio_seis_cuotas}", font=font_price, fill=(39, 174, 96))
+            current_y += 60
+
         precio_tarjeta = row.get('DEBIT/CREDIT', row.get('LISTA/TARJETA'))
         if pd.notna(precio_tarjeta) and str(precio_tarjeta).strip() not in ['', '-', 'None']:
             if isinstance(precio_tarjeta, (int, float)):
