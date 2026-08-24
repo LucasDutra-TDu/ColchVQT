@@ -1,5 +1,6 @@
 # logic/proveedores_service.py
 import json
+import os
 import uuid
 import datetime
 from enum import Enum
@@ -119,15 +120,36 @@ class ProveedoresService:
                 json.dump({}, f)
 
     def guardar_proveedores(self):
+        """
+        Escribe proveedores.json de forma atómica: primero a un archivo
+        temporal en la misma carpeta y recién al final se reemplaza el
+        archivo real con os.replace (atómico dentro del mismo filesystem).
+
+        Por qué: antes se escribía directo sobre el archivo real. Un corte
+        de luz o crash a mitad de esa escritura dejaba un JSON truncado e
+        inválido, perdiendo TODO el historial de cuentas con proveedores de
+        una sola vez. Con este esquema, en el peor caso se pierde solo el
+        último cambio (el archivo temporal), pero el archivo real nunca
+        queda en un estado corrupto a medio escribir.
+        """
+        data_a_guardar = {
+            prov_id: prov.to_dict()
+            for prov_id, prov in self.proveedores.items()
+        }
+        archivo_temporal = self.data_file.parent / f"{self.data_file.name}.tmp"
         try:
-            with open(self.data_file, 'w', encoding='utf-8') as f:
-                data_a_guardar = {
-                    prov_id: prov.to_dict()
-                    for prov_id, prov in self.proveedores.items()
-                }
+            with open(archivo_temporal, 'w', encoding='utf-8') as f:
                 json.dump(data_a_guardar, f, indent=4, ensure_ascii=False)
-        except (IOError, TypeError) as e:
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(archivo_temporal, self.data_file)
+        except (IOError, TypeError, OSError) as e:
             log_error(f"Error al guardar los proveedores: {e}")
+            if archivo_temporal.exists():
+                try:
+                    archivo_temporal.unlink()
+                except OSError:
+                    pass
 
     def cargar_proveedores(self):
         if not self.data_file.exists() or self.data_file.stat().st_size == 0:

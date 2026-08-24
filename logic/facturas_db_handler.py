@@ -59,34 +59,38 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total_venta: float) -> int:
+def _insertar_factura(con: sqlite3.Connection, items_carrito: List[Dict[str, Any]], metodo_pago: str, total_venta: float) -> int:
     """
-    Registra una venta.
-    items_carrito: Debe venir con 'precio_venta_final' y 'precio_lista_base'.
+    Inserta una factura usando una conexión YA ABIERTA, sin hacer commit.
+
+    Separado de registrar_venta() para poder compartir una misma transacción
+    con otras escrituras relacionadas (ej: el plan de crédito asociado, ver
+    credits_service.registrar_venta_a_credito). Quien llama a esta función
+    es responsable de hacer con.commit() cuando corresponda.
     """
     fecha_iso = datetime.datetime.now().replace(microsecond=0).isoformat()
-    
+
     items_to_store = []
     ganancia_total = 0.0
 
     for item in items_carrito:
         cantidad = int(item.get("cantidad", 1))
-        
+
         # 1. Precio de Venta Real (lo que pagó el cliente)
-        precio_unitario = float(item.get("precio_venta_final", 0)) 
-        
+        precio_unitario = float(item.get("precio_venta_final", 0))
+
         # 2. Costo
         costo_unitario = float(item.get("COSTO", 0))
-        
+
         # 3. Precio Base para Comisiones (CORRECCIÓN CRÍTICA)
         # Priorizamos el dato calculado por el CartService
         precio_base_ref = float(item.get("precio_lista_base", 0))
-        
+
         # Fallback solo si viene en 0 (ej: venta manual o script viejo)
         if precio_base_ref == 0:
              # Intentamos buscar la columna original
              precio_base_ref = float(item.get("EFECTIVO/TRANSF", 0))
-        
+
         # Último recurso: si no hay base, usamos el precio de venta
         if precio_base_ref == 0:
             precio_base_ref = precio_unitario
@@ -107,16 +111,26 @@ def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total
 
     items_json = json.dumps(items_to_store, ensure_ascii=False)
 
+    cursor = con.execute(
+        """
+        INSERT INTO facturas (fecha, metodo_pago, total, ganancia, items_json)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (fecha_iso, metodo_pago, total_venta, ganancia_total, items_json)
+    )
+    return cursor.lastrowid
+
+
+def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total_venta: float) -> int:
+    """
+    Registra una venta de forma independiente (abre y cierra su propia
+    conexión/transacción). items_carrito: Debe venir con
+    'precio_venta_final' y 'precio_lista_base'.
+    """
     with _get_connection() as con:
-        cursor = con.execute(
-            """
-            INSERT INTO facturas (fecha, metodo_pago, total, ganancia, items_json)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (fecha_iso, metodo_pago, total_venta, ganancia_total, items_json)
-        )
+        factura_id = _insertar_factura(con, items_carrito, metodo_pago, total_venta)
         con.commit()
-        return cursor.lastrowid
+        return factura_id
 
 def obtener_historial() -> List[Dict]:
     with _get_connection() as con:

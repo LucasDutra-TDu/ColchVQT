@@ -37,26 +37,62 @@ def get_local_file_path():
     """
     return os.path.join(get_data_dir(), LOCAL_FILENAME)
 
+def _es_excel_valido(path) -> bool:
+    """
+    Verifica que el archivo sea un Excel legible y tenga al menos una hoja
+    con columnas reales, antes de arriesgarnos a pisar con él la única
+    copia local de respaldo. Protege contra el caso de que Google devuelva
+    una respuesta 200 con contenido inválido (ej: una página de error, o
+    una descarga cortada a la mitad).
+    """
+    try:
+        excel_file = pd.ExcelFile(path)
+        if not excel_file.sheet_names:
+            return False
+        for hoja in excel_file.sheet_names:
+            df = excel_file.parse(hoja, nrows=1)
+            if len(df.columns) > 0:
+                return True
+        return False
+    except Exception:
+        return False
+
 def descargar_archivo():
     """
     Intenta descargar el archivo desde Google Sheets y guardarlo en data/.
-    Si falla, usa la última versión local persistente.
+    Si falla, o si lo descargado no resulta ser un Excel válido, usa la
+    última versión local persistente SIN pisarla.
     """
     local_file = get_local_file_path()
+    archivo_temporal = local_file + ".tmp"
 
     try:
         print(f"[INFO] {messages['logs']['descargando']}")
         r = requests.get(GOOGLE_SHEET_URL, timeout=100)
         r.raise_for_status()
-        with open(local_file, 'wb') as f:
+
+        with open(archivo_temporal, 'wb') as f:
             f.write(r.content)
+
+        if not _es_excel_valido(archivo_temporal):
+            raise ValueError("El archivo descargado no es un Excel válido o no tiene datos.")
+
+        # Recién acá, con el archivo ya validado, pisamos la copia
+        # persistente. os.replace es atómico dentro del mismo filesystem.
+        os.replace(archivo_temporal, local_file)
+
         print(f"[INFO] {messages['logs']['descarga_exitosa']}")
         return local_file, False  # archivo descargado exitosamente
     except Exception as e:
         print(f"[WARNING] {messages['errors']['fallo_descarga']} {e}")
+        if os.path.exists(archivo_temporal):
+            try:
+                os.remove(archivo_temporal)
+            except OSError:
+                pass
         if os.path.exists(local_file):
             print(f"[INFO] {messages['logs']['usando_local']}")
-            return local_file, True  # se usa archivo local
+            return local_file, True  # se usa archivo local (intacto)
         else:
             print(f"[ERROR] {messages['errors']['fallo_total']}")
             return None, False  # no hay archivo local disponible

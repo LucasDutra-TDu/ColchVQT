@@ -8,6 +8,8 @@ import sys
 import os
 from pathlib import Path
 
+from logic.facturas_db_handler import _insertar_factura
+
 # --- INICIO DE LA BRÚJULA UNIVERSAL ---
 def get_base_path():
     """
@@ -82,61 +84,105 @@ def init_credits_db():
 
 # --- Operaciones de Escritura ---
 
-def buscar_o_crear_cliente(dni: str, nombre: str, telefono: str, direccion: str) -> int:
-    with _get_connection() as con:
-        cur = con.execute("SELECT id FROM clientes WHERE dni = ?", (dni,))
-        row = cur.fetchone()
-        
-        if row:
-            con.execute("UPDATE clientes SET nombre=?, telefono=?, direccion=? WHERE id=?", 
-                       (nombre, telefono, direccion, row['id']))
-            return row['id']
-        else:
-            cur = con.execute("INSERT INTO clientes (dni, nombre, telefono, direccion) VALUES (?, ?, ?, ?)", 
-                             (dni, nombre, telefono, direccion))
-            con.commit()
-            return cur.lastrowid
+def _buscar_o_crear_cliente(con: sqlite3.Connection, dni: str, nombre: str, telefono: str, direccion: str) -> int:
+    """Versión que opera sobre una conexión YA ABIERTA, sin hacer commit."""
+    cur = con.execute("SELECT id FROM clientes WHERE dni = ?", (dni,))
+    row = cur.fetchone()
 
-def registrar_plan_credito(factura_id: int, cliente_data: dict, plan_info: dict):
-    cliente_id = buscar_o_crear_cliente(
-        cliente_data['dni'], cliente_data['nombre'], 
+    if row:
+        con.execute("UPDATE clientes SET nombre=?, telefono=?, direccion=? WHERE id=?",
+                   (nombre, telefono, direccion, row['id']))
+        return row['id']
+    else:
+        cur = con.execute("INSERT INTO clientes (dni, nombre, telefono, direccion) VALUES (?, ?, ?, ?)",
+                         (dni, nombre, telefono, direccion))
+        return cur.lastrowid
+
+
+def buscar_o_crear_cliente(dni: str, nombre: str, telefono: str, direccion: str) -> int:
+    """Versión independiente (abre y cierra su propia conexión/transacción)."""
+    with _get_connection() as con:
+        cliente_id = _buscar_o_crear_cliente(con, dni, nombre, telefono, direccion)
+        con.commit()
+        return cliente_id
+
+
+def _insertar_plan_credito(con: sqlite3.Connection, factura_id: int, cliente_data: dict, plan_info: dict) -> int:
+    """
+    Inserta cliente + crédito + cuotas usando una conexión YA ABIERTA, sin
+    hacer commit. Separado de registrar_plan_credito() para poder compartir
+    una misma transacción con la creación de la factura asociada (ver
+    registrar_venta_a_credito). Quien llama es responsable del commit.
+    """
+    cliente_id = _buscar_o_crear_cliente(
+        con, cliente_data['dni'], cliente_data['nombre'],
         cliente_data.get('telefono', ''), cliente_data.get('direccion', '')
     )
-    
-    fecha_hoy = datetime.date.today()
-    
-    with _get_connection() as con:
-        # 1. Cabecera (Guardamos ahora el PRECIO BASE también)
-        cur = con.execute("""
-            INSERT INTO creditos (factura_id, cliente_id, monto_financiado, monto_base, cantidad_cuotas, fecha_otorgamiento)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (factura_id, cliente_id, plan_info['precio_final'], plan_info['precio_base'], plan_info['num_cuotas'], fecha_hoy.isoformat()))
-        
-        credito_id = cur.lastrowid
-        
-        # 2. Cuotas (La #1 se paga HOY)
-        monto_cuota = plan_info['valor_cuota']
-        
-        for i in range(1, plan_info['num_cuotas'] + 1):
-            if i == 1:
-                # Cuota 1: Vence hoy y se paga hoy automáticamente
-                fecha_venc = fecha_hoy
-                estado = 'PAGADO'
-                fecha_pago = fecha_hoy.isoformat()
-            else:
-                # Cuota 2 en adelante: 30 días, 60 días... desde hoy
-                # (i-1) porque la cuota 2 es a 30 días, la 3 a 60, etc.
-                fecha_venc = fecha_hoy + datetime.timedelta(days=30 * (i - 1))
-                estado = 'PENDIENTE'
-                fecha_pago = None
 
-            con.execute("""
-                INSERT INTO cuotas (credito_id, numero_cuota, fecha_vencimiento, monto, estado, fecha_pago)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (credito_id, i, fecha_venc.isoformat(), monto_cuota, estado, fecha_pago))
-        
+    fecha_hoy = datetime.date.today()
+
+    # 1. Cabecera (Guardamos ahora el PRECIO BASE también)
+    cur = con.execute("""
+        INSERT INTO creditos (factura_id, cliente_id, monto_financiado, monto_base, cantidad_cuotas, fecha_otorgamiento)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (factura_id, cliente_id, plan_info['precio_final'], plan_info['precio_base'], plan_info['num_cuotas'], fecha_hoy.isoformat()))
+
+    credito_id = cur.lastrowid
+
+    # 2. Cuotas (La #1 se paga HOY)
+    monto_cuota = plan_info['valor_cuota']
+
+    for i in range(1, plan_info['num_cuotas'] + 1):
+        if i == 1:
+            # Cuota 1: Vence hoy y se paga hoy automáticamente
+            fecha_venc = fecha_hoy
+            estado = 'PAGADO'
+            fecha_pago = fecha_hoy.isoformat()
+        else:
+            # Cuota 2 en adelante: 30 días, 60 días... desde hoy
+            # (i-1) porque la cuota 2 es a 30 días, la 3 a 60, etc.
+            fecha_venc = fecha_hoy + datetime.timedelta(days=30 * (i - 1))
+            estado = 'PENDIENTE'
+            fecha_pago = None
+
+        con.execute("""
+            INSERT INTO cuotas (credito_id, numero_cuota, fecha_vencimiento, monto, estado, fecha_pago)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (credito_id, i, fecha_venc.isoformat(), monto_cuota, estado, fecha_pago))
+
+    return credito_id
+
+
+def registrar_plan_credito(factura_id: int, cliente_data: dict, plan_info: dict):
+    """Registra un plan de crédito de forma independiente (abre su propia conexión)."""
+    with _get_connection() as con:
+        credito_id = _insertar_plan_credito(con, factura_id, cliente_data, plan_info)
         con.commit()
         return credito_id
+
+
+def registrar_venta_a_credito(items_carrito: list, metodo_pago: str, total_venta: float,
+                               cliente_data: dict, plan_info: dict):
+    """
+    Registra la factura Y el plan de crédito (cliente + cuotas) en una
+    ÚNICA transacción atómica.
+
+    Por qué existe: antes, el checkout hacía registrar_venta() (con su
+    propio commit) y DESPUÉS registrar_plan_credito() por separado. Si el
+    segundo paso fallaba, quedaba una factura de "Crédito de la Casa" ya
+    confirmada en la base, pero sin cliente ni cronograma de cuotas
+    asociado — imposible de cobrar, y el vendedor no tenía forma de saber
+    que la venta ya había quedado registrada. Con todo en una sola
+    transacción, si cualquiera de los dos pasos falla, no se guarda nada
+    (ni la factura ni el crédito), y es seguro reintentar la operación.
+
+    Devuelve (factura_id, credito_id).
+    """
+    with _get_connection() as con:
+        factura_id = _insertar_factura(con, items_carrito, metodo_pago, total_venta)
+        credito_id = _insertar_plan_credito(con, factura_id, cliente_data, plan_info)
+        con.commit()
+    return factura_id, credito_id
 
 # --- Operaciones de Lectura y Gestión ---
 

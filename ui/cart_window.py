@@ -13,7 +13,7 @@ from logic.constants import METODOS_PAGO, ESTILOS, TASA_INTERES_MENSUAL
 from logic.cart_service import CartService
 from logic.facturas_db_handler import registrar_venta
 from logic.financiero import format_currency, calcular_plan_credito
-from logic.credits_service import registrar_plan_credito
+from logic.credits_service import registrar_venta_a_credito
 from logic.pdf_service import generar_documentacion_credito
 from logic.stock_service import procesar_descuento_por_venta
 from logic.log_service import log_error
@@ -339,25 +339,38 @@ class CartWindow(QWidget):
                 return
 
             # --- Procesamiento ---
-            factura_id = registrar_venta(items_checkout, metodo, total_venta)
+            if metodo == "Crédito de la Casa":
+                # Factura + plan de crédito en UNA SOLA transacción atómica:
+                # si falla el plan de cuotas, la factura tampoco queda
+                # registrada. Antes podía quedar una factura de "Crédito de
+                # la Casa" confirmada sin cliente ni cronograma asociado si
+                # el segundo paso fallaba después de que el primero ya
+                # hubiera hecho commit.
+                factura_id, _credito_id = registrar_venta_a_credito(
+                    items_checkout, metodo, total_venta, cliente_data, self.plan_credito_actual
+                )
+            else:
+                factura_id = registrar_venta(items_checkout, metodo, total_venta)
 
             # ¡NUEVA LÓGICA DE STOCK! Descontamos lo vendido.
-            # Envolvemos en un try-except para que un fallo en stock no arruine la venta
+            # Se hace DESPUÉS de que la venta (y el crédito, si aplica) ya
+            # están confirmados. Envolvemos en un try-except para que un
+            # fallo en stock no arruine la venta ya registrada, pero
+            # avisamos explícitamente para que se pueda reconciliar a mano.
+            stock_ok = True
             try:
                 procesar_descuento_por_venta(items_checkout, factura_id)
             except Exception as e:
-                # La venta ya se confirmó (factura_id existe), así que no
-                # interrumpimos el flujo. Pero antes esto se perdía en un
-                # print() invisible en el .exe --windowed: ahora queda
-                # registrado en data/app.log para poder reconciliar el
-                # stock manualmente.
+                stock_ok = False
+                # Antes esto se perdía en un print() invisible en el .exe
+                # --windowed: ahora queda registrado en data/app.log Y se
+                # avisa explícitamente más abajo.
                 log_error(f"Fallo al descontar stock tras venta (Factura #{factura_id}): {e}")
 
             if metodo == "Crédito de la Casa":
-                registrar_plan_credito(factura_id, cliente_data, self.plan_credito_actual)
                 path_contrato = generar_documentacion_credito(cliente_data, items_checkout, self.plan_credito_actual)
-                
-                QMessageBox.information(self, "Éxito", 
+
+                QMessageBox.information(self, "Éxito",
                     f"Venta Crédito Registrada.\n\nDocumentos generados en:\n{path_contrato}")
                 try:
                     os.startfile(os.path.dirname(path_contrato))
@@ -365,6 +378,16 @@ class CartWindow(QWidget):
                     pass
             else:
                 QMessageBox.information(self, "Éxito", "Venta registrada correctamente.")
+
+            if not stock_ok:
+                QMessageBox.warning(
+                    self, "Atención: stock no descontado",
+                    f"La venta (Factura #{factura_id}) se registró correctamente,\n"
+                    "pero no se pudo descontar el stock automáticamente.\n\n"
+                    "Revisá y ajustá el stock de estos productos a mano desde\n"
+                    "'📦 Inventario / Stock'. El detalle del error quedó guardado\n"
+                    "en el log de la aplicación."
+                )
 
             # Limpieza FINAL
             self.cart_service.limpiar_carrito()
