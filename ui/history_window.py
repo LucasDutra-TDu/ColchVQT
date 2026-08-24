@@ -93,13 +93,16 @@ class DetalleFacturaDialog(QDialog):
         botones_layout.addWidget(btn_print)
         
         botones_layout.addStretch()
-        
-        # Botón Editar Excepcional
-        btn_editar = QPushButton("⚙️ Venta Especial")
-        btn_editar.setStyleSheet("background-color: #f39c12; color: white; font-weight: bold; padding: 8px;")
-        btn_editar.clicked.connect(self.editar_venta_excepcional)
-        botones_layout.addWidget(btn_editar)
-        
+
+        # El botón "⚙️ Venta Especial" (edición manual de total/comisiones de
+        # una factura ya emitida) queda OCULTO a propósito -- Fase 3 de la
+        # auditoría, decisión de Lucas. El método editar_venta_excepcional()
+        # de abajo, y actualizar_venta_especial() en facturas_db_handler.py,
+        # se mantienen intactos y sin uso: son la base sobre la que se va a
+        # construir en Fase 4 un sistema de descuentos por compra de varios
+        # productos, en vez de quedar como un acceso manual sin auditoría de
+        # quién/cuándo hizo el cambio.
+
         # Botón Cerrar (Standard)
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.clicked.connect(self.accept)

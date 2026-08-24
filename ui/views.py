@@ -18,6 +18,7 @@ from logic import catalogo_service
 from logic.catalogo_service import formatear_producto_para_clipboard
 # Importamos la nueva lógica financiera
 from logic.financiero import calcular_plan_cuotas, format_currency, generar_texto_clipboard
+from logic.pricing_service import encontrar_precio_base
 from logic.cart_service import CartService
 
 # Importamos las lógicas
@@ -35,14 +36,14 @@ def _handle_calculo_cuotas(parent: QWidget, fila_data: dict):
     import math # Necesario para el math.ceil
     
     # 1. Validación del Precio Base
-    precio_base_val = fila_data.get("EFECTIVO/TRANSF")
-    if not precio_base_val:
-        precio_base_val = fila_data.get("PRECIO", fila_data.get("CONTADO", 0))
-
-    try:
-        precio_base = float(precio_base_val)
-    except (ValueError, TypeError):
-        QMessageBox.warning(parent, "Error de Datos", f"El producto no tiene un precio base válido.\nValor: {precio_base_val}")
+    # Detección robusta compartida con cart_service.py y cart_window.py
+    # (ver logic/pricing_service.py -- Fase 3 de la auditoría): antes esta
+    # calculadora solo miraba EFECTIVO/TRANSF/PRECIO/CONTADO, así que podía
+    # mostrar "sin precio válido" para un producto que sí tenía precio en
+    # otra columna reconocida por el resto de la app.
+    precio_base = encontrar_precio_base(fila_data)
+    if precio_base <= 0:
+        QMessageBox.warning(parent, "Error de Datos", f"El producto no tiene un precio base válido.\nValor: {fila_data.get('EFECTIVO/TRANSF')}")
         return
 
     # 2. Interacción Usuario (Seleccionar Cuotas)

@@ -3,9 +3,30 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 from logic.constants import IMG_CATALOGO_DIR, RUTA_FONT_FLYER, RUTA_LOGO_EMPRESA
 from logic.financiero import format_currency # Usamos tu función existente
+from logic.log_service import log_warning
 
 import re
 from pathlib import Path
+
+
+def _cargar_fuentes_flyer():
+    """
+    Carga la tipografía del flyer desde RUTA_FONT_FLYER (Liberation Sans,
+    bundleada en data/recursos/ -- ver logic/constants.py). Si el archivo
+    no está presente (ej: instalación vieja sin el recurso todavía copiado),
+    cae al font por defecto de Pillow en vez de romper la generación del
+    flyer, pero deja constancia en el log para que se note y se corrija.
+    """
+    try:
+        font_path = str(RUTA_FONT_FLYER)
+        font_main = ImageFont.truetype(font_path, 32)
+        font_title = ImageFont.truetype(font_path, 45)
+        font_price = ImageFont.truetype(font_path, 38)
+        return font_main, font_title, font_price
+    except Exception as e:
+        log_warning(f"Flyer: no se pudo cargar la fuente '{RUTA_FONT_FLYER}' ({e}); usando fuente por defecto de Pillow.")
+        font_default = ImageFont.load_default()
+        return font_default, font_default, font_default
 
 
 def obtener_ruta_imagen(row: dict):
@@ -91,19 +112,9 @@ def generar_flyer_producto(row: dict, ruta_imagen: Path, ruta_logo: Path = None,
     flyer = Image.new('RGB', (canvas_width, canvas_height), color='white')
     draw = ImageDraw.Draw(flyer)
 
-    # Definir tipografía por defecto (puedes usar RUTA_FONT_FLYER si la tienes)
-    # Aquí usaré fuentes genéricas para que no falle, ajústalas a tus .ttf si tienes
-    try:
-        # Asumiendo que RUTA_FONT_FLYER está definida en constants
-        # font_path = str(RUTA_FONT_FLYER) 
-        # Pero usaré una ruta por defecto por seguridad:
-        font_path = "arial.ttf" # ReportLab/Pillow a veces encuentran arial
-        font_main = ImageFont.truetype(font_path, 32)
-        font_title = ImageFont.truetype(font_path, 45)
-        font_price = ImageFont.truetype(font_path, 38)
-    except Exception:
-        # Fallback si no hay fuentes instaladas
-        font_main = font_title = font_price = ImageFont.load_default()
+    # Tipografía del flyer (Liberation Sans bundleada, con fallback a la
+    # fuente por defecto de Pillow si el .ttf no está presente).
+    font_main, font_title, font_price = _cargar_fuentes_flyer()
 
     text_color = (44, 62, 80) # Azul oscuro elegante
 

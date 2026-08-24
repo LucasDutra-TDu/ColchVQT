@@ -32,7 +32,11 @@ IMG_CATALOGO_DIR = DATA_DIR / "imagenes" # data/imagenes/
 RECURSOS_DIR = DATA_DIR / "recursos"     # data/recursos/
 
 # Recursos específicos para el Flyer
-RUTA_FONT_FLYER = RECURSOS_DIR / "arial.ttf" # Necesitas conseguir este archivo .ttf
+# Liberation Sans: fuente libre (SIL Open Font License 1.1), métricamente
+# compatible con Arial. Se bundlea en data/recursos/ porque "arial.ttf" no
+# viene instalado por defecto en todas las Windows ni se puede redistribuir
+# (Arial es propietaria de Microsoft). Ver data/recursos/LiberationSans-OFL.txt.
+RUTA_FONT_FLYER = RECURSOS_DIR / "LiberationSans-Regular.ttf"
 RUTA_LOGO_EMPRESA = RECURSOS_DIR / "logo_galpon.png" # Opcional .png transparente
 
 # ============================

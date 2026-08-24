@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from PySide6.QtCore import QObject, Signal
 from logic.constants import METODOS_PAGO
 from logic.financiero import calcular_plan_credito
+from logic.pricing_service import encontrar_precio_base, obtener_precio_unitario
 
 class CartService(QObject):
     cart_updated = Signal()
@@ -60,56 +61,17 @@ class CartService(QObject):
     def get_count(self) -> int:
         return len(self._items)
 
-    # --- LÓGICA DE DETECCIÓN INTELIGENTE ---
+    # --- LÓGICA DE DETECCIÓN DE PRECIO ---
+    # Movida a logic/pricing_service.py (Fase 3 de la auditoría) para que
+    # cart_window.py y views.py usen exactamente la misma detección y no
+    # puedan volver a divergir. Se mantienen estos wrappers privados para
+    # no tocar preparar_checkout()/obtener_total() más abajo.
 
     def _encontrar_valor_base(self, item: Dict[str, Any]) -> float:
-        """
-        Intenta encontrar el precio de LISTA/EFECTIVO buscando en varias columnas posibles.
-        """
-        # 1. Intento Exacto (Tu nombre estándar)
-        val = float(item.get("EFECTIVO/TRANSF", 0))
-        if val > 0: return val
-
-        # 2. Intento Alternativo (Nombres comunes)
-        nombres_comunes = ["EFECTIVO", "CONTADO", "PRECIO", "PRECIO LISTA", "BASE"]
-        for key in item.keys():
-            key_upper = key.upper().strip()
-            # Si la columna contiene alguna palabra clave y tiene valor
-            if any(x in key_upper for x in nombres_comunes):
-                try:
-                    val = float(item[key])
-                    if val > 0: return val
-                except:
-                    continue
-        
-        # 3. Fallback final: Si no hay nada, devolvemos 0 (para alertar después)
-        return 0.0
+        return encontrar_precio_base(item)
 
     def _obtener_precio_unitario_actual(self, item: Dict[str, Any], p_base: float) -> float:
-        """Determina el precio unitario según el método seleccionado."""
-        metodo = self._metodo_pago_actual
-        
-        if "6 Cuotas" in metodo:
-            col_seis = next((k for k in item.keys() if "6 CUOTAS" in k.upper()), None)
-            if col_seis:
-                return float(item.get(col_seis, p_base))
-            return p_base
-
-        elif "Tarjeta" in metodo or "Debito" in metodo:
-            # Buscamos columna de tarjeta
-            col_tarjeta = next((k for k in item.keys() if "DEBIT" in k.upper() or "CREDIT" in k.upper() or "TARJETA" in k.upper()), None)
-            if col_tarjeta:
-                return float(item.get(col_tarjeta, p_base))
-            return p_base # Si no hay columna tarjeta, asumimos precio base (o podrías aplicar recargo fijo aquí)
-
-        elif "Crédito" in metodo:
-            # El precio unitario "base" para la factura sigue siendo el efectivo
-            # El recargo financiero se maneja globalmente en el total o en cuotas
-            # PERO para persistencia, ¿qué precio guardamos?
-            # Guardamos el precio BASE. El interés se guarda en el plan de cuotas.
-            return p_base 
-        
-        return p_base
+        return obtener_precio_unitario(item, p_base, self._metodo_pago_actual)
 
     def preparar_checkout(self) -> List[Dict[str, Any]]:
         """

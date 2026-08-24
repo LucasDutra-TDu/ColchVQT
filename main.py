@@ -54,7 +54,28 @@ def main():
             log_warning(warn_msg)
 
         # 2. Fase de Carga de Datos (I/O)
-        sheets = cargar_hojas()
+        # Si el .xlsx local está dañado o en un formato inválido, pd.read_excel
+        # lanza una excepción. La capturamos acá puntualmente (en vez de dejar
+        # que caiga en el catch genérico de más abajo) para mostrar un mensaje
+        # claro y específico, y cerrar prolijamente -- sin intentar ninguna
+        # recuperación automática (la descarga ya valida el .xlsx antes de
+        # guardarlo, ver logic/data_loader.py::_es_excel_valido, así que este
+        # caso debería ser muy raro en la práctica).
+        try:
+            sheets = cargar_hojas()
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            log_error(f"No se pudo leer el catálogo local (archivo dañado o formato inválido): {e}\n{error_trace}")
+            QMessageBox.critical(
+                None,
+                "Catálogo dañado",
+                "No se pudo abrir el archivo del catálogo de productos.\n\n"
+                "El archivo local puede estar dañado o en un formato inválido.\n"
+                "Contactá a soporte técnico para restaurar una copia de respaldo\n"
+                "desde data/backups/ o volver a descargar el catálogo."
+            )
+            sys.exit(1)
+
         cart_service = CartService()
 
         # 3. Inyección y Lanzamiento

@@ -17,6 +17,7 @@ from logic.credits_service import registrar_venta_a_credito
 from logic.pdf_service import generar_documentacion_credito
 from logic.stock_service import procesar_descuento_por_venta
 from logic.log_service import log_error
+from logic.pricing_service import encontrar_precio_base, obtener_precio_unitario
 
 # --- Diálogo para pedir Datos del Cliente ---
 class ClienteFormDialog(QDialog):
@@ -163,37 +164,17 @@ class CartWindow(QWidget):
             cant = int(item.get("cantidad", 1))
             
             # --- LÓGICA DE PRECIO UNITARIO UNIFICADA ---
-            # 1. Obtenemos el Precio Base (Efectivo)
-            p_base = float(item.get("EFECTIVO/TRANSF", 0))
-            if p_base == 0: 
-                p_base = float(item.get("PRECIO", 0))
+            # Detección robusta compartida con cart_service.py y views.py
+            # (ver logic/pricing_service.py -- Fase 3 de la auditoría).
+            p_base = encontrar_precio_base(item)
 
-            # 2. Calculamos el Precio Unitario según el método
-            precio_unitario = 0
-            
             if metodo_actual == "Crédito de la Casa":
                 # Usamos la misma función financiera que usamos para el contrato
                 plan_item = calcular_plan_credito(p_base, cuotas)
-                # El precio unitario a mostrar es el valor financiado dividido cantidad
-                # O mejor: El precio final financiado unitario
-                precio_unitario = plan_item['precio_final'] # Esto ya incluye interés y redondeo
-            
-            elif "6 Cuotas" in metodo_actual:
-                 precio_unitario = float(item.get("6 CUOTAS", 0))
-                 if precio_unitario == 0:
-                     precio_unitario = p_base
-
-            elif "Tarjeta" in metodo_actual:
-                 # Intentamos buscar columna específica de tarjeta
-                 precio_unitario = float(item.get("DEBIT/CREDIT", 0))
-                 # Si no tiene columna tarjeta, quizás quieras aplicar un recargo fijo o usar base
-                 if precio_unitario == 0:
-                     precio_unitario = p_base # O aplicar recargo aquí si tu negocio lo requiere
-
+                # El precio unitario a mostrar es el valor financiado (ya incluye interés y redondeo)
+                precio_unitario = plan_item['precio_final']
             else:
-                # Efectivo
-                precio_unitario = p_base
-
+                precio_unitario = obtener_precio_unitario(item, p_base, metodo_actual)
             # -------------------------------------------
 
             self.table.setItem(row, 0, QTableWidgetItem(codigo))
@@ -223,11 +204,17 @@ class CartWindow(QWidget):
 
     def _recalcular_totales(self):
         """Calcula el total aplicando recargos si es Crédito."""
-        # 1. Obtenemos el total BASE (Efectivo) del carrito
-        # Truco: forzamos obtener el total como si fuera efectivo para tener la base limpia
+        # 1. Obtenemos el total BASE (Efectivo) del carrito.
+        # Detección robusta compartida con cart_service.py y views.py (ver
+        # logic/pricing_service.py -- Fase 3 de la auditoría). ESTE es el
+        # punto que antes generaba ventas a Crédito de la Casa registradas
+        # con base $0 si el producto no tenía la columna exacta
+        # EFECTIVO/TRANSF (hallazgo de la auditoría): total_base alimenta
+        # directamente self.plan_credito_actual, que es lo que se guarda
+        # como total de la venta en _handle_finalizar.
         items = self.cart_service.obtener_items()
-        total_base = sum(float(i.get("EFECTIVO/TRANSF", 0)) * i.get("cantidad", 1) for i in items)
-        
+        total_base = sum(encontrar_precio_base(i) * i.get("cantidad", 1) for i in items)
+
         metodo = self.combo_metodo.currentText()
         texto_total = ""
 
@@ -235,35 +222,26 @@ class CartWindow(QWidget):
             cuotas = self.spin_cuotas.value()
             # Usamos logic/financiero.py
             self.plan_credito_actual = calcular_plan_credito(total_base, cuotas)
-            
+
             total_final = self.plan_credito_actual['precio_final']
             v_cuota = self.plan_credito_actual['valor_cuota']
-            
+
             # Actualizar label informativo
             interes_pct = int(TASA_INTERES_MENSUAL * cuotas * 100)
             self.lbl_interes_info.setText(f"+{interes_pct}% Interés")
-            
+
             texto_total = f"Total Financiado: {format_currency(total_final)} ({cuotas} x {format_currency(v_cuota)})"
-        
-        elif "6 Cuotas" in metodo:
-             total_seis = sum(float(i.get("6 CUOTAS", 0)) * i.get("cantidad", 1) for i in items)
-             if total_seis == 0:
-                 total_seis = total_base
 
-             texto_total = f"Total 6 Cuotas Fijas: {format_currency(total_seis)}"
+        elif "6 Cuotas" in metodo or "Tarjeta" in metodo:
+             # Mismo detector que usa cada fila de la tabla (ver actualizar_tabla).
+             total_metodo = sum(
+                 obtener_precio_unitario(i, encontrar_precio_base(i), metodo) * i.get("cantidad", 1)
+                 for i in items
+             )
+             etiqueta = "Total 6 Cuotas Fijas" if "6 Cuotas" in metodo else "Total Lista (Tarjeta)"
+             texto_total = f"{etiqueta}: {format_currency(total_metodo)}"
              self.plan_credito_actual = None
 
-        elif "Tarjeta" in metodo:
-             # "DEBIT/CREDIT"
-             total_tarjeta = sum(float(i.get("DEBIT/CREDIT", 0)) * i.get("cantidad", 1) for i in items)
-             
-             # Fallback visual si devuelve 0
-             if total_tarjeta == 0:
-                 total_tarjeta = total_base
-
-             texto_total = f"Total Lista (Tarjeta): {format_currency(total_tarjeta)}"
-             self.plan_credito_actual = None
-             
         else:
             texto_total = f"Total Contado: {format_currency(total_base)}"
             self.plan_credito_actual = None
