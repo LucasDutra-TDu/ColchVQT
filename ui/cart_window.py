@@ -16,6 +16,7 @@ from logic.financiero import format_currency, calcular_plan_credito
 from logic.credits_service import registrar_plan_credito
 from logic.pdf_service import generar_documentacion_credito
 from logic.stock_service import procesar_descuento_por_venta
+from logic.log_service import log_error
 
 # --- Diálogo para pedir Datos del Cliente ---
 class ClienteFormDialog(QDialog):
@@ -156,6 +157,9 @@ class CartWindow(QWidget):
         for row, item in enumerate(items):
             codigo = str(item.get("CÓDIGO", ""))
             modelo = str(item.get("MODELO", ""))
+            medida = item.get("MEDIDA (LARG-ANCH-ESP)", item.get("MEDIDA", ""))
+            if medida and str(medida).lower() not in ["", "nan", "-"]:
+                modelo += f" (Medida: {medida})"
             cant = int(item.get("cantidad", 1))
             
             # --- LÓGICA DE PRECIO UNITARIO UNIFICADA ---
@@ -299,7 +303,11 @@ class CartWindow(QWidget):
             if metodo == "Crédito de la Casa" and self.plan_credito_actual:
                  plan = self.plan_credito_actual
                  for item in items_checkout:
-                     detalle_msg += f"• {item['cantidad']} x {item['MODELO']}<br>"
+                     mod = item['MODELO']
+                     med = item.get("MEDIDA (LARG-ANCH-ESP)", item.get("MEDIDA", ""))
+                     if med and str(med).lower() not in ["", "nan", "-"]:
+                         mod += f" (Medida: {med})"
+                     detalle_msg += f"• {item['cantidad']} x {mod}<br>"
                  detalle_msg += f"<hr><b>Plan:</b> {plan['num_cuotas']} cuotas de {format_currency(plan['valor_cuota'])}<br>"
                  detalle_msg += f"<b style='font-size:14px'>Total Financiado: {format_currency(plan['precio_final'])}</b>"
                  total_venta = plan['precio_final']
@@ -309,7 +317,11 @@ class CartWindow(QWidget):
                     p_unit = item['precio_venta_final']
                     subtot = p_unit * item['cantidad']
                     total_calc += subtot
-                    detalle_msg += f"• {item['cantidad']} x {item['MODELO']} ({format_currency(subtot)})<br>"
+                    mod = item['MODELO']
+                    med = item.get("MEDIDA (LARG-ANCH-ESP)", item.get("MEDIDA", ""))
+                    if med and str(med).lower() not in ["", "nan", "-"]:
+                         mod += f" (Medida: {med})"
+                    detalle_msg += f"• {item['cantidad']} x {mod} ({format_currency(subtot)})<br>"
                 
                 detalle_msg += f"<hr><b style='font-size:14px'>Total a Pagar: {format_currency(total_calc)}</b>"
                 total_venta = total_calc
@@ -334,7 +346,12 @@ class CartWindow(QWidget):
             try:
                 procesar_descuento_por_venta(items_checkout, factura_id)
             except Exception as e:
-                print(f"❌ Error crítico descontando stock: {e}")
+                # La venta ya se confirmó (factura_id existe), así que no
+                # interrumpimos el flujo. Pero antes esto se perdía en un
+                # print() invisible en el .exe --windowed: ahora queda
+                # registrado en data/app.log para poder reconciliar el
+                # stock manualmente.
+                log_error(f"Fallo al descontar stock tras venta (Factura #{factura_id}): {e}")
 
             if metodo == "Crédito de la Casa":
                 registrar_plan_credito(factura_id, cliente_data, self.plan_credito_actual)

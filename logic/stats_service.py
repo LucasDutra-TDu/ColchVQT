@@ -71,10 +71,20 @@ def obtener_reporte_mensual(mes: int, anio: int) -> dict:
                 costo_total_venta += p_costo * cant
             
             # Comisiones
-            comis = calcular_comisiones(f_dict['metodo_pago'], base_efectivo_total, total_venta)
+            override_str = f_dict.get('comisiones_override')
+            comis_aplicadas = False
             
-            # Restamos Costo a Ganancia Empresa
-            comis["empresa"] = comis["empresa"] - costo_total_venta
+            if override_str and str(override_str).strip().lower() not in ('none', 'null', '', '0'):
+                try:
+                    comis = json.loads(override_str)
+                    comis_aplicadas = True
+                except:
+                    pass
+            
+            if not comis_aplicadas:
+                comis = calcular_comisiones(f_dict['metodo_pago'], base_efectivo_total, total_venta)
+                # Restamos Costo a Ganancia Empresa
+                comis["empresa"] = comis["empresa"] - costo_total_venta
             
             _sumar_totales(reporte, comis, total_venta)
             

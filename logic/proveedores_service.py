@@ -6,6 +6,7 @@ from enum import Enum
 from typing import List, Dict, Any, Optional
 
 from logic.facturas_db_handler import BASE_DIR
+from logic.log_service import log_error
 
 # --- Enums ---
 class FormaPago(Enum):
@@ -126,7 +127,7 @@ class ProveedoresService:
                 }
                 json.dump(data_a_guardar, f, indent=4, ensure_ascii=False)
         except (IOError, TypeError) as e:
-            print(f"Error al guardar los proveedores: {e}")
+            log_error(f"Error al guardar los proveedores: {e}")
 
     def cargar_proveedores(self):
         if not self.data_file.exists() or self.data_file.stat().st_size == 0:
@@ -140,7 +141,7 @@ class ProveedoresService:
                     for prov_id, prov_data in data.items()
                 }
         except (IOError, json.JSONDecodeError) as e:
-            print(f"Error al cargar o decodificar proveedores: {e}")
+            log_error(f"Error al cargar o decodificar proveedores: {e}")
             self.proveedores = {}
     
     def nombre_existe(self, nombre: str) -> bool:

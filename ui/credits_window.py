@@ -50,6 +50,9 @@ class CreditDetailDialog(QDialog):
         txt_productos = ""
         for item in self.items:
             modelo = item.get('MODELO', item.get('modelo', 'Producto'))
+            medida = item.get("medida", "")
+            if medida and str(medida).lower() not in ["", "nan", "-"]:
+                modelo += f" (Medida: {medida})"
             cant = item.get('cantidad', 1)
             
             # --- CORRECCIÓN DE PRECIO ---

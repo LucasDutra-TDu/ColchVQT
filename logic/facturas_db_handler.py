@@ -48,11 +48,16 @@ def init_db():
         metodo_pago TEXT NOT NULL,
         total REAL NOT NULL,
         ganancia REAL DEFAULT 0,
-        items_json TEXT NOT NULL
+        items_json TEXT NOT NULL,
+        comisiones_override TEXT DEFAULT NULL
     )
     """
     with _get_connection() as con:
         con.execute(schema)
+        try:
+            con.execute("ALTER TABLE facturas ADD COLUMN comisiones_override TEXT DEFAULT NULL")
+        except sqlite3.OperationalError:
+            pass
 
 def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total_venta: float) -> int:
     """
@@ -96,7 +101,8 @@ def registrar_venta(items_carrito: List[Dict[str, Any]], metodo_pago: str, total
             "cantidad": cantidad,
             "precio_unitario": precio_unitario,
             "costo_historico": costo_unitario,
-            "precio_lista_base": precio_base_ref # <--- Aquí guardamos el dato correcto
+            "precio_lista_base": precio_base_ref, # <--- Aquí guardamos el dato correcto
+            "medida": item.get("MEDIDA (LARG-ANCH-ESP)", item.get("MEDIDA", ""))
         })
 
     items_json = json.dumps(items_to_store, ensure_ascii=False)
@@ -124,6 +130,15 @@ def buscar_por_fecha(fecha_str: str) -> List[Dict]:
             (f"{fecha_str}%",)
         ).fetchall()
     return [_parse_row(row) for row in rows]
+
+def actualizar_venta_especial(id_factura: int, nuevo_total: float, override_json: str):
+    """Actualiza una venta para reflejar totales y comisiones manuales (Venta Excepcional)."""
+    with _get_connection() as con:
+        con.execute(
+            "UPDATE facturas SET total = ?, comisiones_override = ? WHERE id = ?",
+            (nuevo_total, override_json, id_factura)
+        )
+        con.commit()
 
 def _parse_row(row: sqlite3.Row) -> Dict[str, Any]:
     d = dict(row)

@@ -111,7 +111,16 @@ def _agregar_contenido_contrato(story, styles, cliente, items, plan):
     monto_saldo_restante = plan['precio_final'] - monto_entrega_inicial
     cuotas_restantes = plan['num_cuotas'] - 1
 
-    texto_productos = "<br/>".join([f"- {i.get('MODELO', '')} ({i.get('cantidad', 1)})" for i in items])
+    prod_strs = []
+    for i in items:
+        mod = i.get('MODELO', i.get('modelo', ''))
+        cant = i.get('cantidad', 1)
+        med = i.get('medida', '')
+        desc_item = f"- {mod} ({cant})"
+        if med and str(med).lower() not in ["", "nan", "-"]:
+            desc_item += f" (Medida: {med})"
+        prod_strs.append(desc_item)
+    texto_productos = "<br/>".join(prod_strs)
 
     v = {
         "nombre": cliente['nombre'],
@@ -383,8 +392,11 @@ def generar_comprobante_venta(factura: dict) -> str:
         cant = int(item.get('cantidad', 1))
         modelo = item.get('modelo', item.get('MODELO', 'Articulo'))
         desc = item.get('descripcion', '')
+        medida = item.get('medida', '')
         
         nombre_completo = f"{modelo} {desc}".strip()
+        if medida and str(medida).lower() not in ["", "nan", "-"]:
+            nombre_completo += f" (Medida: {medida})"
         
         # 2. Envolvemos el texto en un Paragraph
         p_descripcion = Paragraph(nombre_completo, estilo_celda)

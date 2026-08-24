@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTableView, 
     QPushButton, QLabel, QHeaderView, QAbstractItemView, QMessageBox,
-    QDialog, QFormLayout, QDialogButtonBox
+    QDialog, QFormLayout, QDialogButtonBox, QLineEdit
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt
@@ -39,6 +39,9 @@ class DetalleFacturaDialog(QDialog):
 
         for item in items:
             nombre = f"{item.get('modelo', '')} {item.get('descripcion', '')}"
+            medida = item.get("medida", "")
+            if medida and str(medida).lower() not in ["", "nan", "-"]:
+                nombre += f" (Medida: {medida})"
             cant = int(item.get("cantidad", 1))
             p_unit_final = float(item.get("precio_unitario", 0))
             p_unit_base = float(item.get("precio_lista_base", p_unit_final))
@@ -91,12 +94,65 @@ class DetalleFacturaDialog(QDialog):
         
         botones_layout.addStretch()
         
+        # Botón Editar Excepcional
+        btn_editar = QPushButton("⚙️ Venta Especial")
+        btn_editar.setStyleSheet("background-color: #f39c12; color: white; font-weight: bold; padding: 8px;")
+        btn_editar.clicked.connect(self.editar_venta_excepcional)
+        botones_layout.addWidget(btn_editar)
+        
         # Botón Cerrar (Standard)
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.clicked.connect(self.accept)
         botones_layout.addWidget(btn_cerrar)
         
         layout.addLayout(botones_layout)
+
+    def editar_venta_excepcional(self):
+        # Creamos input dialogs simples o un dialog custom
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Venta Excepcional")
+        dlg.resize(300, 250)
+        form = QFormLayout(dlg)
+        
+        inp_total = QLineEdit(str(self.factura['total']))
+        inp_empresa = QLineEdit("0")
+        inp_gerente = QLineEdit("0")
+        inp_vendedor = QLineEdit("0")
+        
+        import json
+        ov_str = self.factura.get('comisiones_override')
+        if ov_str:
+            try:
+                ov = json.loads(ov_str)
+                inp_empresa.setText(str(ov.get('empresa', 0)))
+                inp_gerente.setText(str(ov.get('gerente', 0)))
+                inp_vendedor.setText(str(ov.get('vendedor', 0)))
+            except: pass
+            
+        form.addRow("Nuevo Total Cobrado:", inp_total)
+        form.addRow("Neto Empresa:", inp_empresa)
+        form.addRow("Comisión Gerente:", inp_gerente)
+        form.addRow("Comisión Vendedor:", inp_vendedor)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.rejected.connect(dlg.reject)
+        form.addRow(btn_box)
+        
+        if dlg.exec():
+            try:
+                nt = float(inp_total.text())
+                ov_dict = {
+                    "empresa": float(inp_empresa.text()),
+                    "gerente": float(inp_gerente.text()),
+                    "vendedor": float(inp_vendedor.text())
+                }
+                from logic.facturas_db_handler import actualizar_venta_especial
+                actualizar_venta_especial(self.factura['id'], nt, json.dumps(ov_dict))
+                QMessageBox.information(self, "Éxito", "Venta Especial Registrada. Recarga el historial y las estadísticas.")
+                self.accept()
+            except ValueError:
+                QMessageBox.warning(self, "Error", "Por favor ingresa solo números válidos.")
 
     def imprimir_comprobante(self):
         try:
