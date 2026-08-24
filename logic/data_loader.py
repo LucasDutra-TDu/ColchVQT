@@ -49,36 +49,48 @@ def _es_excel_valido(path) -> bool:
     copia local de respaldo. Protege contra el caso de que Google devuelva
     una respuesta 200 con contenido inválido (ej: una página de error, o
     una descarga cortada a la mitad).
+
+    Usa 'with' para cerrar el archivo explícitamente: pd.ExcelFile() abre
+    un handle sobre 'path' que en Windows queda tomado hasta que se cierra
+    (a diferencia de Linux, donde el reference-counting de CPython lo
+    libera enseguida). Sin el 'with', el handle podía seguir abierto justo
+    cuando el llamador intenta hacer os.replace() sobre este mismo archivo
+    unos milisegundos después -- causando el "[WinError 32] El proceso no
+    tiene acceso al archivo..." que se creyó primero un problema de OneDrive
+    (hallazgo 24/08/2026, revisado el mismo día al reproducirse igual en
+    una carpeta local sin ningún sync de por medio).
     """
     try:
-        excel_file = pd.ExcelFile(path)
-        if not excel_file.sheet_names:
+        with pd.ExcelFile(path) as excel_file:
+            if not excel_file.sheet_names:
+                return False
+            for hoja in excel_file.sheet_names:
+                df = excel_file.parse(hoja, nrows=1)
+                if len(df.columns) > 0:
+                    return True
             return False
-        for hoja in excel_file.sheet_names:
-            df = excel_file.parse(hoja, nrows=1)
-            if len(df.columns) > 0:
-                return True
-        return False
     except Exception:
         return False
 
 def _reemplazar_con_reintentos(origen, destino):
     """
     os.replace(origen, destino) con reintentos ante bloqueos transitorios
-    del archivo destino (ej: OneDrive u otro backup en la nube sincronizando
-    el .xlsx local justo en ese instante, o un antivirus escaneándolo).
+    del archivo destino (ej: un antivirus escaneándolo, un backup en la
+    nube tocándolo, u otro handle tardando en liberarse).
 
-    Hallazgo 24/08/2026: en la práctica esto falló con
-    "[WinError 32] El proceso no tiene acceso al archivo porque está siendo
-    utilizado por otro proceso" -- típico de una carpeta sincronizada por
-    OneDrive. El bloqueo suele liberarse en menos de un segundo, así que
-    reintentar unas pocas veces con una espera corta resuelve la mayoría de
-    los casos sin caer al archivo local (evitando así el aviso y todo el
-    camino de "usando archivo local", que además resultó ser el que expuso
-    el crash nativo del QMessageBox -- ver logic/data_loader.py y main.py).
-    Si sigue bloqueado después de todos los intentos, se re-lanza la
-    excepción original y el llamador cae al comportamiento normal de
-    fallback (usar el archivo local existente).
+    Hallazgo 24/08/2026: esto falló en la práctica con "[WinError 32] El
+    proceso no tiene acceso al archivo porque está siendo utilizado por
+    otro proceso". Se sospechó primero de OneDrive (el proyecto vivía en
+    una carpeta sincronizada), pero se reprodujo igual el mismo día en una
+    carpeta 100% local sin ningún sync de por medio -- la causa real era
+    que _es_excel_valido() dejaba abierto el handle de pd.ExcelFile() sobre
+    este mismo archivo (ver el 'with' agregado ahí). Con eso corregido,
+    estos reintentos ya no deberían hacer falta en el caso normal; se
+    dejan como red de contención ante bloqueos externos genuinos (ej.
+    antivirus, backup en la nube si el proyecto volviera a vivir en una
+    carpeta sincronizada). Si sigue bloqueado después de todos los
+    intentos, se re-lanza la excepción original y el llamador cae al
+    comportamiento normal de fallback (usar el archivo local existente).
     """
     ultimo_error = None
     for intento in range(1, REEMPLAZO_MAX_INTENTOS + 1):
