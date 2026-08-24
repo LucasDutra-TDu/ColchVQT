@@ -14,7 +14,7 @@ from ui.proveedores_window import ProveedoresWindow
 from logic.proveedores_service import ProveedoresService
 
 class MainWindow(QMainWindow):
-    def __init__(self, data_context: Dict[str, Any], cart_service: CartService):
+    def __init__(self, data_context: Dict[str, Any], cart_service: CartService, aviso_archivo_local: bool = False):
         super().__init__()
         self.data_context = data_context
         self.cart_service = cart_service # Guardamos referencia
@@ -82,6 +82,18 @@ class MainWindow(QMainWindow):
         
         self.stack.addWidget(self.catalogo_view)
         self.setCentralWidget(self.stack)
+
+        # Aviso NO bloqueante de "usando archivo local" (hallazgo 24/08/2026):
+        # antes esto se mostraba con un QMessageBox modal ANTES de que
+        # existiera esta ventana, y provocó un crash nativo (access
+        # violation) la primera vez que el camino se ejecutó de verdad.
+        # Mostrarlo acá, en la barra de estado y con la ventana ya
+        # construida, informa lo mismo sin ese riesgo.
+        if aviso_archivo_local:
+            self.statusBar().showMessage(
+                "📄 No se pudo conectar a Google Sheets: se está usando el catálogo guardado localmente (puede no ser el más reciente).",
+                20000,
+            )
 
     def _on_cart_update(self):
         """

@@ -122,6 +122,89 @@ class TestDescargarArchivo(unittest.TestCase):
         self.assertEqual(self._local_path().read_bytes(), contenido_original)
 
 
+class TestReemplazarConReintentos(unittest.TestCase):
+    """
+    Hallazgo 24/08/2026: os.replace() del .tmp descargado sobre el .xlsx
+    persistente falló en producción con "[WinError 32] El proceso no tiene
+    acceso al archivo porque está siendo utilizado por otro proceso"
+    (típico de una carpeta sincronizada por OneDrive bloqueando el archivo
+    un instante). _reemplazar_con_reintentos reintenta unas pocas veces
+    antes de rendirse.
+    """
+
+    def setUp(self):
+        self._sleep_patcher = patch("logic.data_loader.time.sleep", return_value=None)
+        self._sleep_patcher.start()
+
+    def tearDown(self):
+        self._sleep_patcher.stop()
+
+    def test_exito_al_primer_intento_no_reintenta(self):
+        with patch("logic.data_loader.os.replace") as mock_replace:
+            data_loader._reemplazar_con_reintentos("origen", "destino")
+        mock_replace.assert_called_once_with("origen", "destino")
+
+    def test_bloqueo_transitorio_se_recupera_con_reintentos(self):
+        efectos = [PermissionError("[WinError 32] archivo en uso")] * 2 + [None]
+        with patch("logic.data_loader.os.replace", side_effect=efectos) as mock_replace:
+            data_loader._reemplazar_con_reintentos("origen", "destino")
+        self.assertEqual(mock_replace.call_count, 3)
+
+    def test_bloqueo_persistente_agota_reintentos_y_relanza(self):
+        error = PermissionError("[WinError 32] archivo en uso")
+        with patch("logic.data_loader.os.replace", side_effect=error) as mock_replace:
+            with self.assertRaises(PermissionError):
+                data_loader._reemplazar_con_reintentos("origen", "destino")
+        self.assertEqual(mock_replace.call_count, data_loader.REEMPLAZO_MAX_INTENTOS)
+
+
+class TestDescargarArchivoConBloqueoTransitorio(unittest.TestCase):
+    """
+    Integración: el bloqueo transitorio del archivo destino no debería
+    forzar innecesariamente el camino de "usando archivo local" si el
+    bloqueo se libera dentro de los reintentos.
+    """
+
+    def setUp(self):
+        import tempfile
+        self._tmp_dir = tempfile.mkdtemp(prefix="colchvqt_dataloader_lock_")
+        self._original_get_base_dir = data_loader.get_base_dir
+        data_loader.get_base_dir = lambda: self._tmp_dir
+        self._sleep_patcher = patch("logic.data_loader.time.sleep", return_value=None)
+        self._sleep_patcher.start()
+
+    def tearDown(self):
+        data_loader.get_base_dir = self._original_get_base_dir
+        self._sleep_patcher.stop()
+        import shutil
+        shutil.rmtree(self._tmp_dir, ignore_errors=True)
+
+    def test_bloqueo_transitorio_no_forza_fallback_a_local(self):
+        local_path = Path(data_loader.get_local_file_path())
+        local_path.write_bytes(_excel_bytes_valido())
+
+        efectos = [PermissionError("[WinError 32] archivo en uso")] * 2 + [None]
+        with patch("logic.data_loader.requests.get", return_value=_RespuestaFalsa(_excel_bytes_valido())), \
+             patch("logic.data_loader.os.replace", side_effect=efectos):
+            path, uso_local = data_loader.descargar_archivo()
+
+        self.assertFalse(uso_local)
+        self.assertIsNotNone(path)
+
+    def test_bloqueo_persistente_cae_a_local_como_antes(self):
+        local_path = Path(data_loader.get_local_file_path())
+        local_path.write_bytes(_excel_bytes_valido())
+        contenido_original = local_path.read_bytes()
+
+        error = PermissionError("[WinError 32] archivo en uso")
+        with patch("logic.data_loader.requests.get", return_value=_RespuestaFalsa(_excel_bytes_valido())), \
+             patch("logic.data_loader.os.replace", side_effect=error):
+            path, uso_local = data_loader.descargar_archivo()
+
+        self.assertTrue(uso_local)
+        self.assertEqual(local_path.read_bytes(), contenido_original)
+
+
 class TestEsExcelValido(unittest.TestCase):
     def setUp(self):
         import tempfile

@@ -2,9 +2,14 @@
 
 import os
 import sys
+import time
 import requests
 import pandas as pd
 from logic.constants import LOCAL_FILENAME, messages
+
+# Reintentos para el os.replace() final (ver _reemplazar_con_reintentos).
+REEMPLAZO_MAX_INTENTOS = 5
+REEMPLAZO_ESPERA_SEGUNDOS = 0.4
 
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1gBXFjr48AqRrzTAl-47fY5aq05NcpDZZpR9nEYsQI4U/export?format=xlsx"
 
@@ -57,6 +62,36 @@ def _es_excel_valido(path) -> bool:
     except Exception:
         return False
 
+def _reemplazar_con_reintentos(origen, destino):
+    """
+    os.replace(origen, destino) con reintentos ante bloqueos transitorios
+    del archivo destino (ej: OneDrive u otro backup en la nube sincronizando
+    el .xlsx local justo en ese instante, o un antivirus escaneándolo).
+
+    Hallazgo 24/08/2026: en la práctica esto falló con
+    "[WinError 32] El proceso no tiene acceso al archivo porque está siendo
+    utilizado por otro proceso" -- típico de una carpeta sincronizada por
+    OneDrive. El bloqueo suele liberarse en menos de un segundo, así que
+    reintentar unas pocas veces con una espera corta resuelve la mayoría de
+    los casos sin caer al archivo local (evitando así el aviso y todo el
+    camino de "usando archivo local", que además resultó ser el que expuso
+    el crash nativo del QMessageBox -- ver logic/data_loader.py y main.py).
+    Si sigue bloqueado después de todos los intentos, se re-lanza la
+    excepción original y el llamador cae al comportamiento normal de
+    fallback (usar el archivo local existente).
+    """
+    ultimo_error = None
+    for intento in range(1, REEMPLAZO_MAX_INTENTOS + 1):
+        try:
+            os.replace(origen, destino)
+            return
+        except (PermissionError, OSError) as e:
+            ultimo_error = e
+            if intento < REEMPLAZO_MAX_INTENTOS:
+                time.sleep(REEMPLAZO_ESPERA_SEGUNDOS)
+    raise ultimo_error
+
+
 def descargar_archivo():
     """
     Intenta descargar el archivo desde Google Sheets y guardarlo en data/.
@@ -78,8 +113,9 @@ def descargar_archivo():
             raise ValueError("El archivo descargado no es un Excel válido o no tiene datos.")
 
         # Recién acá, con el archivo ya validado, pisamos la copia
-        # persistente. os.replace es atómico dentro del mismo filesystem.
-        os.replace(archivo_temporal, local_file)
+        # persistente. os.replace es atómico dentro del mismo filesystem;
+        # se reintenta ante bloqueos transitorios (ver _reemplazar_con_reintentos).
+        _reemplazar_con_reintentos(archivo_temporal, local_file)
 
         print(f"[INFO] {messages['logs']['descarga_exitosa']}")
         return local_file, False  # archivo descargado exitosamente
